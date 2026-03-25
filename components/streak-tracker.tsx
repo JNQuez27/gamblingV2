@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppContext } from '@/context/app-context';
+import { useAppContext } from '../context/app-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Award } from 'lucide-react';
 import { motion } from 'framer-motion';

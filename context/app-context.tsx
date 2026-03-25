@@ -2,171 +2,142 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export interface SpendingRecord {
-  id: string;
-  amount: number;
-  commodity: string;
-  timestamp: Date;
-  notes?: string;
-  opportunityCost?: string;
+interface Milestone {
+  title: string;
+  description: string;
+  unlocked: boolean;
+  date?: string;
 }
 
-export interface MoodRecord {
-  id: string;
-  mood: 'great' | 'good' | 'okay' | 'bad' | 'terrible';
-  urge: number; // 1-10 scale
-  timestamp: Date;
-  notes?: string;
-}
-
-export interface UserProfile {
+interface User {
   name: string;
   email: string;
   currentStreak: number;
   longestStreak: number;
-  totalDaysFree: number;
-  joinDate: Date;
-  selectedInterests: string[];
+  gems: number;
+  avatarUrl?: string;
 }
 
-export interface StreakMilestone {
-  days: number;
-  unlocked: boolean;
-  date?: Date;
-  title: string;
-  description: string;
+interface Spending {
+  id: number;
+  amount: number;
+  category: string;
+  timestamp: Date;
+  notes?: string;
 }
 
-export interface AppContextType {
-  user: UserProfile;
-  setUser: (user: UserProfile) => void;
-  spending: SpendingRecord[];
-  addSpending: (record: Omit<SpendingRecord, 'id'>) => void;
-  removeSpending: (id: string) => void;
-  moods: MoodRecord[];
-  addMood: (record: Omit<MoodRecord, 'id'>) => void;
-  updateStreak: (increment: boolean) => void;
-  milestones: StreakMilestone[];
+interface DiaryEntry {
+  mood: string;
+  note: string;
+  timestamp: string;
+}
+
+interface Mood {
+  id: number;
+  mood: string;
+  urge: number;
+  timestamp: Date;
+  notes?: string;
+}
+
+interface AppContextType {
+  milestones: Milestone[];
+  user: User;
+  streak: number;
+  spending: Spending[];
+  addSpending: (spending: Omit<Spending, 'id'>) => void;
+  removeSpending: (id: number) => void;
+  moods: Mood[];
+  addMood: (mood: Omit<Mood, 'id'>) => void;
+  diaryEntries: Record<string, DiaryEntry>;
+  setDiaryEntries: React.Dispatch<React.SetStateAction<Record<string, DiaryEntry>>>;
+  pausedDays: string[];
+  setPausedDays: React.Dispatch<React.SetStateAction<string[]>>;
+  setScreen: (screen: string) => void;
+  setStreak: (streak: number) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile>({
-    name: 'Juan',
-    email: 'juan@example.com',
-    currentStreak: 23,
-    longestStreak: 45,
-    totalDaysFree: 67,
-    joinDate: new Date('2024-01-01'),
-    selectedInterests: ['Mindfulness', 'Fitness', 'Health'],
+export function AppWrapper({ children }: { children: ReactNode }) {
+  const [milestones, setMilestones] = useState<Milestone[]>([
+    {
+      title: '1 Day',
+      description: 'You made it through the first day!',
+      unlocked: true,
+      date: '2024-01-01',
+    },
+    {
+      title: '3 Days',
+      description: 'Three days of progress!',
+      unlocked: true,
+      date: '2024-01-03',
+    },
+    {
+      title: '1 Week',
+      description: 'One week of commitment!',
+      unlocked: false,
+    },
+    {
+      title: '2 Weeks',
+      description: 'Two weeks strong!',
+      unlocked: false,
+    },
+    {
+      title: '1 Month',
+      description: 'One month of dedication!',
+      unlocked: false,
+    },
+  ]);
+
+  const [user, setUser] = useState<User>({
+    name: 'John Doe',
+    email: 'john.doe@example.com',
+    currentStreak: 5,
+    longestStreak: 10,
+    gems: 100,
+    avatarUrl: 'https://github.com/shadcn.png',
   });
 
-  const [spending, setSpending] = useState<SpendingRecord[]>([
-    {
-      id: '1',
-      amount: 50,
-      commodity: 'Coffee',
-      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      notes: 'Daily habit',
-    },
-    {
-      id: '2',
-      amount: 120,
-      commodity: 'Subscription Services',
-      timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      notes: 'Streaming services',
-    },
-    {
-      id: '3',
-      amount: 200,
-      commodity: 'Entertainment',
-      timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-      notes: 'Weekend activities',
-    },
-  ]);
+  const [spending, setSpending] = useState<Spending[]>([]);
+  const [moods, setMoods] = useState<Mood[]>([]);
+  const [diaryEntries, setDiaryEntries] = useState<Record<string, DiaryEntry>>({});
+  const [pausedDays, setPausedDays] = useState<string[]>([]);
+  const [activeScreen, setActiveScreen] = useState('home');
 
-  const [moods, setMoods] = useState<MoodRecord[]>([
-    {
-      id: '1',
-      mood: 'good',
-      urge: 3,
-      timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      notes: 'Feeling positive',
-    },
-    {
-      id: '2',
-      mood: 'okay',
-      urge: 5,
-      timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-      notes: 'Standard day',
-    },
-  ]);
-
-  const [milestones, setMilestones] = useState<StreakMilestone[]>([
-    {
-      days: 7,
-      unlocked: true,
-      date: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000),
-      title: 'Week Warrior',
-      description: '7 days gambling-free',
-    },
-    {
-      days: 30,
-      unlocked: true,
-      date: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000),
-      title: 'Month Master',
-      description: '30 days gambling-free',
-    },
-    {
-      days: 100,
-      unlocked: false,
-      title: 'Century Champion',
-      description: '100 days gambling-free',
-    },
-    { days: 365, unlocked: false, title: 'Year of Strength', description: '1 year gambling-free' },
-  ]);
-
-  const addSpending = (record: Omit<SpendingRecord, 'id'>) => {
-    setSpending([...spending, { ...record, id: Date.now().toString() }]);
+  const addSpending = (newSpending: Omit<Spending, 'id'>) => {
+    setSpending([...spending, { ...newSpending, id: Date.now() }]);
   };
 
-  const removeSpending = (id: string) => {
+  const removeSpending = (id: number) => {
     setSpending(spending.filter((s) => s.id !== id));
   };
 
-  const addMood = (record: Omit<MoodRecord, 'id'>) => {
-    setMoods([...moods, { ...record, id: Date.now().toString() }]);
+  const addMood = (newMood: Omit<Mood, 'id'>) => {
+    setMoods([...moods, { ...newMood, id: Date.now() }]);
   };
 
-  const updateStreak = (increment: boolean) => {
-    if (increment) {
-      setUser({
-        ...user,
-        currentStreak: user.currentStreak + 1,
-        longestStreak: Math.max(user.currentStreak + 1, user.longestStreak),
-        totalDaysFree: user.totalDaysFree + 1,
-      });
-    } else {
-      setUser({
-        ...user,
-        currentStreak: 0,
-      });
-    }
+  const setStreak = (newStreak: number) => {
+    setUser((prevUser) => ({ ...prevUser, currentStreak: newStreak }));
   };
 
   return (
     <AppContext.Provider
       value={{
+        milestones,
         user,
-        setUser,
+        streak: user.currentStreak,
         spending,
         addSpending,
         removeSpending,
         moods,
         addMood,
-        updateStreak,
-        milestones,
+        diaryEntries,
+        setDiaryEntries,
+        pausedDays,
+        setPausedDays,
+        setScreen: setActiveScreen,
+        setStreak,
       }}
     >
       {children}
@@ -176,8 +147,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 export function useAppContext() {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useAppContext must be used within AppProvider');
+  if (context === undefined) {
+    throw new Error('useAppContext must be used within an AppWrapper');
   }
   return context;
 }

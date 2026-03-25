@@ -5,7 +5,7 @@ import { Onboarding } from '@/components/onboarding';
 import { AuthScreen } from '@/components/auth-screen';
 import { InterestSelection } from '@/components/interest-selection';
 import { MainApp } from '@/components/main-app';
-import { AppProvider } from '@/context/app-context';
+import { AppWrapper } from '../context/app-context';
 
 type AppState = 'onboarding' | 'auth' | 'interests' | 'home';
 
@@ -25,8 +25,8 @@ export default function Home() {
   }
 
   return (
-    <AppProvider>
+    <AppWrapper>
       <MainApp />
-    </AppProvider>
+    </AppWrapper>
   );
 }

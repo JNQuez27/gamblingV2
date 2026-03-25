@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Home, BookOpen, Heart, User } from 'lucide-react';
 import { HomeDashboard } from './home-dashboard';
-import { SpendingTimeline } from './spending-timeline';
+import { DiaryScreen } from './diary-screen';
 import { CommodityLibrary } from './commodity-library';
 import { ProfileScreen } from './profile-screen';
 import { BottomNav } from './bottom-nav';
@@ -18,7 +18,7 @@ export function MainApp() {
       case 'home':
         return <HomeDashboard />;
       case 'diary':
-        return <SpendingTimeline />;
+        return <DiaryScreen />;
       case 'learn':
         return <CommodityLibrary />;
       case 'profile':

@@ -80,7 +80,7 @@ export function AnalyticsDashboard() {
   // Spending by commodity
   const spendingByCommodity = spending.reduce(
     (acc, s) => {
-      acc[s.commodity] = (acc[s.commodity] || 0) + s.amount;
+      acc[s.category] = (acc[s.category] || 0) + s.amount;
       return acc;
     },
     {} as Record<string, number>,
