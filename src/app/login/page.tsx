@@ -20,7 +20,7 @@ export default function LoginPage() {
     // Simulate auth delay
     await new Promise((r) => setTimeout(r, 800));
     setLoading(false);
-    router.push("/home");
+    router.push(mode === "signup" ? "/preferences" : "/home");
   };
 
   const handleOAuth = async (provider: string) => {

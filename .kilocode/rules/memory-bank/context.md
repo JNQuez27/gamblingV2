@@ -20,6 +20,8 @@ A full mobile-first reflection & behavior-awareness app built on the Next.js sta
 - [x] Learn screen with category filters, quick practices, featured articles
 - [x] Bottom navigation component (Home, Diary, Learn, Profile) with active state highlighting
 - [x] All lint errors resolved (moved inner components to module scope, fixed Math.random in useState initializer)
+- [x] Reorganized Diary feature folders (layout/map/notes/legacy) with constants/types/utils split
+- [x] Moved BottomNav to ui/navigation with a re-export shim
 
 ## Current Structure
 
@@ -33,7 +35,12 @@ A full mobile-first reflection & behavior-awareness app built on the Next.js sta
 | `src/app/learn/page.tsx` | Articles + practices | ✅ Ready |
 | `src/app/profile/page.tsx` | User profile + stats | ✅ Ready |
 | `src/app/settings/page.tsx` | App settings | ✅ Ready |
-| `src/components/ui/BottomNav.tsx` | Bottom navigation bar | ✅ Ready |
+| `src/app/diary/components/*` | Diary layout/map/notes/legacy components | ✅ Ready |
+| `src/app/diary/constants/index.ts` | Diary constants | ✅ Ready |
+| `src/app/diary/types/index.ts` | Diary types | ✅ Ready |
+| `src/app/diary/utils/index.ts` | Diary utilities | ✅ Ready |
+| `src/components/ui/navigation/BottomNav.tsx` | Bottom navigation bar | ✅ Ready |
+| `src/components/ui/BottomNav.tsx` | BottomNav re-export shim | ✅ Ready |
 | `src/app/globals.css` | CSS variables + global styles | ✅ Ready |
 
 ## Design System
