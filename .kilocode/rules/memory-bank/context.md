@@ -24,6 +24,12 @@ A full mobile-first reflection & behavior-awareness app built on the Next.js sta
 - [x] Moved BottomNav to ui/navigation with a re-export shim
 - [x] Added .env.example files for Next.js and Expo with safe placeholders
 - [x] Clarified .env ignore note in .gitignore
+- [x] Refined Diary map current-day node fill color to better match the system palette
+- [x] Replaced Apple OAuth with Facebook on web + React Native login screens
+- [x] Fixed Home folder build errors and centered the notifications panel to avoid overflow
+- [x] Synced Diary streak counter logic with Home weekly streak calculations
+- [x] Refactored Profile into data/styles/utils + tab components
+- [x] Refactored Settings into data/styles + shared components and cleaned subpages
 
 ## Current Structure
 
