@@ -4,9 +4,9 @@ import type { DiaryEntry } from '../../types';
 
 // ─── NotesList ────────────────────────────────────────────────────────────────
 
-const NotesList = ({ diaryEntries, streak }: {
+const NotesList = ({ diaryEntries, streakCount }: {
   diaryEntries: Record<string, DiaryEntry>;
-  streak: number;
+  streakCount: number;
 }) => {
   const entries = Object.entries(diaryEntries)
     .sort(([a], [b]) => b.localeCompare(a));
@@ -28,7 +28,7 @@ const NotesList = ({ diaryEntries, streak }: {
         const dateLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
           weekday: 'short', month: 'short', day: 'numeric',
         });
-        const dayNum = streak - (Object.keys(diaryEntries).sort((a, b) => b.localeCompare(a)).indexOf(dateStr));
+        const dayNum = streakCount - idx;
         return (
           <motion.div
             key={dateStr}

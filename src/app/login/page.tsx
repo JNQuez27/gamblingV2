@@ -142,7 +142,7 @@ export default function LoginPage() {
           </button>
 
           <button
-            onClick={() => handleOAuth("apple")}
+            onClick={() => handleOAuth("facebook")}
             disabled={loading}
             style={{
               display: "flex",
@@ -153,7 +153,7 @@ export default function LoginPage() {
               padding: "14px",
               borderRadius: "14px",
               border: "none",
-              background: "#111111",
+              background: "#1877F2",
               color: "#ffffff",
               fontSize: "15px",
               fontWeight: 500,
@@ -161,10 +161,13 @@ export default function LoginPage() {
               transition: "all 0.2s",
             }}
           >
-            <svg width="18" height="20" viewBox="0 0 814 1000" fill="white">
-              <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-47.9-162.9-127.7C67.3 752 30.2 650.4 30.2 553.9c0-138.8 90.2-212 176.1-212 61.6 0 107.3 43.3 168.9 43.3 59.4 0 112.9-47.9 175.8-47.9 67.6.1 147 48.6 237.1 203.6zm-174.7-171.6c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z"/>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M15.12 8.5h1.97V5.7c-.34-.05-1.5-.16-2.86-.16-2.83 0-4.77 1.73-4.77 4.9v2.2H6.4v3.1h3.06V22h3.66v-6.26h2.88l.46-3.1h-3.34v-1.9c0-.9.25-1.5 1.54-1.5z"
+                fill="#ffffff"
+              />
             </svg>
-            Continue with Apple
+            Continue with Facebook
           </button>
         </div>
 

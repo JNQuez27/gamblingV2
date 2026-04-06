@@ -84,9 +84,14 @@ export default function LoginScreen() {
                   <Text style={styles.oauthText}>Continue with Google</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => handleOAuth('apple')} disabled={loading} style={styles.oauthBtnApple}>
-                  <Text style={styles.oauthAppleIcon}></Text>
-                  <Text style={styles.oauthAppleText}>Continue with Apple</Text>
+                <TouchableOpacity onPress={() => handleOAuth('facebook')} disabled={loading} style={styles.oauthBtnFacebook}>
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M15.12 8.5h1.97V5.7c-.34-.05-1.5-.16-2.86-.16-2.83 0-4.77 1.73-4.77 4.9v2.2H6.4v3.1h3.06V22h3.66v-6.26h2.88l.46-3.1h-3.34v-1.9c0-.9.25-1.5 1.54-1.5z"
+                      fill="#ffffff"
+                    />
+                  </Svg>
+                  <Text style={styles.oauthFacebookText}>Continue with Facebook</Text>
                 </TouchableOpacity>
               </View>
 
@@ -235,17 +240,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   oauthText: { fontSize: 15, fontWeight: '500', color: Colors.text },
-  oauthBtnApple: {
+  oauthBtnFacebook: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: Colors.black,
+    backgroundColor: '#1877F2',
   },
-  oauthAppleIcon: { color: Colors.white, fontSize: 16 },
-  oauthAppleText: { fontSize: 15, fontWeight: '500', color: Colors.white },
+  oauthFacebookText: { fontSize: 15, fontWeight: '500', color: Colors.white },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: { fontSize: 13, color: Colors.textLight },

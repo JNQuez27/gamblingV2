@@ -36,7 +36,7 @@ const LevelNode = ({
   const nodeBase = 'relative flex items-center justify-center rounded-2xl border transition-all duration-200 select-none';
 
   const nodeStyle = isCurrent
-    ? 'w-16 h-16 bg-white dark:bg-gray-900 border-2 border-sky-400 text-sky-500 ring-4 ring-sky-400/20 cursor-default'
+    ? 'w-16 h-16 bg-sky-100 border-2 border-cyan-300 text-cyan-600 ring-4 ring-cyan-300/30 shadow-[0_0_20px_rgba(34,211,238,0.35)] cursor-default'
     : isCompleted
       ? 'w-14 h-14 bg-amber-400/20 border border-amber-400 text-amber-500 cursor-pointer hover:scale-105 active:scale-95'
       : isUnlocked

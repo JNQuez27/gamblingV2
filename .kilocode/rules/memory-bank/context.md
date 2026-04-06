@@ -22,6 +22,8 @@ A full mobile-first reflection & behavior-awareness app built on the Next.js sta
 - [x] All lint errors resolved (moved inner components to module scope, fixed Math.random in useState initializer)
 - [x] Reorganized Diary feature folders (layout/map/notes/legacy) with constants/types/utils split
 - [x] Moved BottomNav to ui/navigation with a re-export shim
+- [x] Added .env.example files for Next.js and Expo with safe placeholders
+- [x] Clarified .env ignore note in .gitignore
 
 ## Current Structure
 
@@ -80,3 +82,4 @@ Tech: Expo ~53, Expo Router ~4, react-native 0.76, react-native-svg, expo-linear
 | Initial | Template created with base setup |
 | Mar 22 2026 | Full Reflect app built — splash, login, home, profile, settings, diary, learn screens |
 | Mar 22 2026 | React Native migration — full Expo + Expo Router project created in `reflect-rn/` |
+| Apr 5 2026 | Added env example files and reinforced .env ignore guidance |

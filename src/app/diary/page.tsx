@@ -16,13 +16,34 @@ import NotesList from './components/notes/NotesList';
 // ─── DiaryScreen ──────────────────────────────────────────────────────────────
 
 export default function DiaryScreen() {
-  const { streak, diaryEntries } = useAppContext();
+  const { streak, streakMarked, diaryEntries } = useAppContext();
   const currentLevel = streak;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentNodeRef = useRef<HTMLDivElement>(null);
 
   const [openLevel, setOpenLevel] = useState<number | null>(null);
   const [view, setView] = useState<'map' | 'notes'>('map');
+
+  function computedStreak(): number {
+    let count = 0;
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      if (diaryEntries[dateStr]) {
+        count++;
+      } else {
+        if (i === 0 && streakMarked) {
+          count++;
+        }
+        break;
+      }
+    }
+    return count;
+  }
+
+  const streakCount = computedStreak();
 
   // scroll to current node on mount
   useEffect(() => {
@@ -49,10 +70,10 @@ export default function DiaryScreen() {
   return (
     <div style={{ ...styles.appShell, height: '100dvh', overflow: 'hidden' }}>
       <Header onNewEntry={() => {}} view={view} onViewChange={setView} />
-      {typeof streak === 'number' && (
+      {typeof streakCount === 'number' && (
         <div style={styles.floatingStreak}>
           <span>🔥</span>
-          <span>{streak}</span>
+          <span>{streakCount}</span>
         </div>
       )}
 
@@ -160,7 +181,7 @@ export default function DiaryScreen() {
             transition={{ duration: 0.2 }}
             style={{ flex: 1, overflowY: 'auto', paddingBottom: 100, background: 'var(--color-bg)' }}
           >
-            <NotesList diaryEntries={diaryEntries} streak={streak} />
+            <NotesList diaryEntries={diaryEntries} streakCount={streakCount} />
           </motion.div>
         )}
       </AnimatePresence>
