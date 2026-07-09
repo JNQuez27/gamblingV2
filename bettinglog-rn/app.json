@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "BettingLog",
+    "slug": "bettinglog",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "bettinglog",
+    "splash": {
+      "backgroundColor": "#e8f4fd"
+    },
+    "android": {
+      "package": "com.bettinglog.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#e8f4fd"
+      },
+      "permissions": ["POST_NOTIFICATIONS"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-system-ui",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
