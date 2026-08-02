@@ -1,9 +1,9 @@
 # BettingLog — Behavioral Gambling-Awareness App: Unified System Reference
 
-> **Version**: 4.0 (Unified · Mobile · Android-Only)
-> **Last Updated**: July 9, 2026
+> **Version**: 4.0 (Unified · Mobile · Android-First)
+> **Last Updated**: August 2, 2026 (structure reconciled with the current codebase)
 > **Status**: Active Architecture & Build Reference
-> **Platform**: Android only (React Native + Expo)
+> **Platform**: Android-first (React Native + Expo)
 > **Backend**: Supabase only — no separate API server
 
 ---
@@ -177,7 +177,7 @@ BettingLog follows an **Input → Process → Output (IPO)** model. This is the 
 ┌─────────────────────────────────────────────────────────────────┐
 │                     ANDROID DEVICE (single app)                  │
 │                                                                 │
-│   React Native (Expo SDK 53) · TypeScript · Expo Router          │
+│   React Native (Expo SDK 52) · TypeScript · Expo Router          │
 │   React Context (global state) · Expo Notifications (FCM)         │
 │                                                                 │
 │   ┌───────────────────────────────────────────────────────┐    │
@@ -223,39 +223,48 @@ BettingLog follows an **Input → Process → Output (IPO)** model. This is the 
 
 | Concern | Technology | Notes |
 |---|---|---|
-| Framework | React Native | via Expo |
-| Runtime | Expo SDK | 53 |
+| Framework | React Native | 0.76, via Expo |
+| Runtime | Expo SDK | 52 |
 | Language | TypeScript | strict mode |
 | Routing | Expo Router | file-based |
-| State | React Context (`useAppContext`) | + `useReducer` for complex slices |
-| Backend | Supabase | Auth, Postgres, Storage, Edge Functions, pg_cron |
+| Path alias | `@/*` → `src/*` | `tsconfig.json` paths + Jest `moduleNameMapper` |
+| State | React Context (`AppProvider` / `useAppContext`) | |
+| Backend | Supabase | Auth, Postgres, Row-Level Security |
 | DB access | `@supabase/supabase-js` | called only from `src/services/` |
 | Local storage | Expo SecureStore / AsyncStorage | tokens in SecureStore |
 | Push | Expo Notifications | **FCM only** (Android) |
-| Charts | `react-native-gifted-charts` or `victory-native` | trends visualization (§15) |
-| Icons | `lucide-react-native` | |
+| Icons / UI | `react-native-svg` (hand-rolled icons), `expo-linear-gradient` | |
+| Native modules | Custom Expo modules in Kotlin | `app-detector`, `gambling-monitor` |
+| Charts | _not currently installed_ | trends visualization (§15) is planned — add a chart lib when built |
 | AI (optional) | Claude API | gambling app/URL classifier on self-reported data |
 | Currency | PHP (₱) | app-wide default |
 
 > **Removed vs v3.0:** Node/Express, Prisma, Redis, Axios, EAS iOS, shared-types workspace.
+> **Removed in cleanup:** `lucide-react-native` and `react-native-gifted-charts` (both unused); icons are now hand-rolled with `react-native-svg`.
 
 ---
 
 ## 7. Application Structure
 
+The app lives in `bettinglog-rn/`. All importable code sits under `src/` and is imported via the `@/` alias (`@/services/...`, `@/hooks/...`); `app/` contains **routes only**.
+
 ```
-bettinglog/                               # single Android app — no monorepo
-├── app/                                  # Expo Router — file-based screens
+bettinglog-rn/                            # single Expo app (Android-first)
+├── app/                                  # Expo Router — routes ONLY
 │   ├── _layout.tsx                       # Root layout (AppProvider, auth guard)
-│   ├── index.tsx                         # Redirect to /splash
+│   ├── index.tsx                         # Entry redirect
 │   ├── splash.tsx                        # Onboarding slides (non-judgmental framing)
-│   ├── login.tsx                         # Email/password + Google
+│   ├── login.tsx                         # Email/password
+│   ├── assessment.tsx                    # Assessment flow
+│   ├── consultation.tsx                  # Consultation dialogue
+│   ├── visit-logs.tsx                    # Gambling visit logs
+│   ├── weekly-checkin.tsx                # Weekly check-in questionnaire
 │   ├── onboarding/
 │   │   ├── problem.tsx                   # "What brings you here?" (user's problem)
 │   │   ├── gambling-apps.tsx             # Multi-select chips, PH app presets
 │   │   └── baseline.tsx                  # Baseline assessment (for influence measure)
-│   ├── settings.tsx
 │   ├── settings/
+│   │   ├── index.tsx
 │   │   ├── edit-profile.tsx
 │   │   ├── notifications.tsx
 │   │   ├── spending-limit.tsx            # Update spending limitation
@@ -268,78 +277,74 @@ bettinglog/                               # single Android app — no monorepo
 │       └── profile.tsx                   # Analytics, trends, TBP, assessments, consultation
 │
 ├── src/
-│   ├── services/                         # ALL Supabase calls (single source of truth)
+│   ├── services/                         # ALL Supabase + native calls (single source of truth)
 │   │   ├── supabase.ts                   # Client singleton
 │   │   ├── auth.service.ts
 │   │   ├── diary.service.ts
 │   │   ├── assessment.service.ts         # sessions, responses, scoring calls
-│   │   ├── instrument.service.ts         # instruments + validator records
-│   │   ├── weeklyCheckin.service.ts
+│   │   ├── checkin.service.ts            # weekly check-in
 │   │   ├── influence.service.ts          # app-influence snapshots
 │   │   ├── tbp.service.ts
 │   │   ├── spending.service.ts
 │   │   ├── usage.service.ts              # gambling usage + ranking
 │   │   ├── consultation.service.ts
+│   │   ├── streak.service.ts
 │   │   ├── notification.service.ts
-│   │   └── learn.service.ts
+│   │   ├── appDetection.service.ts       # bridges the app-detector native module
+│   │   └── gamblingDetection.service.ts  # bridges the gambling-monitor native module
 │   │
-│   ├── core/
-│   │   ├── providers/
-│   │   │   ├── app-provider.tsx          # Root AppContext
-│   │   │   └── auth-provider.tsx
-│   │   └── hooks/
-│   │       ├── useAppContext.ts
-│   │       ├── useAuth.ts
-│   │       ├── useDiary.ts
-│   │       ├── useAssessment.ts
-│   │       ├── useSpending.ts
-│   │       ├── useUsage.ts
-│   │       └── useConsultation.ts
+│   ├── hooks/                            # useAppContext · useAuth · useSpending
+│   ├── providers/                        # app-provider (root AppContext) · auth-provider
 │   │
 │   ├── utils/                            # PURE functions — build first, test first
-│   │   ├── spendingEngine.ts            # spend status, warning states, % of limit
-│   │   ├── mathEngine.ts                # opportunity-cost + projection notifications
-│   │   ├── thresholdEngine.ts           # "too much" open-frequency detection (§13)
-│   │   ├── scoring.ts                   # instrument scoring (PGSI etc.)
-│   │   ├── influence.ts                 # baseline vs. current delta calculations
-│   │   ├── trends.ts                    # series aggregation for charts
-│   │   ├── ranking.ts                   # top-N gambling apps
-│   │   └── date.ts
+│   │   ├── spendingEngine.ts             # spend status, warning states, % of limit
+│   │   ├── mathEngine.ts                 # opportunity-cost + projection notifications
+│   │   ├── thresholdEngine.ts            # "too much" open-frequency detection (§13)
+│   │   ├── scoring.ts                    # instrument scoring (PGSI etc.)
+│   │   ├── influence.ts                  # baseline vs. current delta calculations
+│   │   ├── ranking.ts                    # top-N gambling apps
+│   │   ├── consultationEngine.ts         # consultation flow logic
+│   │   ├── nudgeEngine.ts                # nudge selection
+│   │   ├── tbpTemplates.ts               # TBP step templates
+│   │   ├── date.ts
+│   │   └── *.test.ts                     # colocated unit tests (spending/threshold/influence)
 │   │
 │   ├── components/
-│   │   ├── ui/                          # Button, Input, Card, Badge, Skeleton, GradientHeader
-│   │   ├── diary/                       # MoodSelector, DiaryEntryCard, JourneyMap
-│   │   ├── assessment/                  # QuestionCard, ScoreResult, RiskBadge
-│   │   ├── charts/                      # TrendChart, UsageRankingChart, SpendGauge
-│   │   ├── tbp/                         # StepCard, StepProgress
-│   │   └── home/                        # StreakTracker, MathInsightCard
+│   │   ├── ui/                           # BackHeader, Mascot, icons (react-native-svg)
+│   │   ├── diary/                        # JourneyMap
+│   │   ├── onboarding/                   # OnboardingScaffold
+│   │   └── visit-logs/                   # GamblingVisitLogs
 │   │
-│   └── types/                           # all TS interfaces
-│       ├── auth.ts
-│       ├── diary.ts
-│       ├── psychology.ts                # readiness, moral level, TBP, assessment
-│       ├── instrument.ts
-│       ├── spending.ts
-│       ├── usage.ts
-│       └── notification.ts
+│   ├── constants/                        # colors, gamblingApps (PH presets), pgsi,
+│   │                                     #   phPrices, seedIds, weeklyCheckin, mentalHealthTerms
+│   │
+│   └── types/                            # auth, diary, psychology, spending, usage,
+│                                         #   notification, influence
 │
-├── constants/
-│   ├── colors.ts
-│   └── gamblingApps.ts                   # PH gambling app/URL presets
+├── modules/                              # custom native modules (Kotlin, Android)
+│   ├── app-detector/                     # detects installed/foreground gambling apps
+│   └── gambling-monitor/                 # background + VPN monitoring service
+│
+├── plugins/
+│   └── withGamblingAppQueries.js         # Expo config plugin (Android app queries)
+├── scripts/
+│   └── gen-onboarding-art.js             # generates onboarding art data
 │
 ├── supabase/
-│   ├── migrations/                       # SQL schema + RLS (source of truth)
-│   └── functions/                        # Edge Functions
-│       ├── score-assessment/
-│       ├── weekly-checkin-push/
-│       └── streak-reset/
+│   └── migrations/                       # SQL schema + RLS (source of truth)
+│       ├── 0001_init.sql                 # tables + Row-Level Security
+│       ├── 0002_seed.sql                 # PGSI, PH app presets, profile trigger
+│       └── 0003_influence_upsert.sql     # weekly influence snapshot index
 │
 ├── assets/
-├── app.json                              # Expo config (Android only)
+├── app.json                              # Expo config (Android-first)
+├── eas.json                              # EAS build config
 ├── package.json
-├── tsconfig.json
+├── tsconfig.json                         # @/* -> ./src/*
 └── .env.local                            # git-ignored
 ```
+
+> **Note:** the native `android/` project is generated by `expo prebuild` and is git-ignored; regenerate it locally as needed. Supabase Edge Functions referenced elsewhere in this document (e.g. §9, §14) are part of the design but are not yet in the repo — only `supabase/migrations/` is committed.
 
 ---
 
@@ -958,7 +963,7 @@ export type UsageBand = 'controlled' | 'elevated' | 'high' | 'severe';
 Unchanged from prior versions — calm, non-judgmental palette.
 
 ```typescript
-// constants/colors.ts
+// src/constants/colors.ts
 export const Colors = {
   primary: '#5b9bd5', primaryDark: '#3a7dbf', primaryLight: '#bfdbfe',
   secondary: '#7ab89a', secondaryDark: '#4f9a74', secondaryLight: '#bbf7d0',
@@ -1070,7 +1075,7 @@ Strict sequencing — **utilities before UI**.
 2. **Schema** — add table + RLS in `supabase/migrations/`.
 3. **Service** — add/extend a file in `src/services/` (only place Supabase is called).
 4. **Utility** — if there's logic, write a pure function in `src/utils/` and unit-test it **before** UI.
-5. **Hook** — expose via `src/core/hooks/`.
+5. **Hook** — expose via `src/hooks/`.
 6. **Screen/Component** — build UI last; components consume hooks, never Supabase.
 7. **Theory check** — confirm the feature maps to a pillar in §2. If it doesn't, reconsider it.
 
