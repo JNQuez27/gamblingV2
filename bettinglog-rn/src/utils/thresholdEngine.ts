@@ -1,4 +1,4 @@
-import type { UsageBand } from '../types/usage';
+import type { UsageBand } from '@/types/usage';
 
 // Answers the core question: "when is it too much?" (kanus-a sobra na?).
 // It classifies how often a user opens gambling apps into a band. The rule is
@@ -32,6 +32,20 @@ export function classifyUsage(
   return 'controlled';
 }
 
+// Heuristic risk for a single logged visit. Late-night opens and long
+// sessions are the classic danger signs; the cut-offs are provisional in the
+// same way DEFAULT_THRESHOLDS is (README §10.2 - a validator can tune them).
+export function visitRiskLevel(
+  createdAt: string,
+  timeSpentMinutes: number,
+): 'low' | 'medium' | 'high' {
+  const hour = new Date(createdAt).getHours();
+  const lateNight = hour >= 22 || hour < 4;
+  if (lateNight || timeSpentMinutes >= 30) return 'high';
+  if (hour >= 18 || timeSpentMinutes >= 10) return 'medium';
+  return 'low';
+}
+
 // Plain-language reason shown to the user, so the number never feels arbitrary.
 export function explainBand(band: UsageBand): string {
   switch (band) {
@@ -40,7 +54,7 @@ export function explainBand(band: UsageBand): string {
     case 'elevated':
       return 'Repetition is building. Each open strengthens the habit loop.';
     case 'high':
-      return 'Strong reinforcement — the habit is getting easier to trigger.';
+      return 'Strong reinforcement - the habit is getting easier to trigger.';
     case 'severe':
       return 'This looks like a compulsive pattern. Consider a consultation.';
   }

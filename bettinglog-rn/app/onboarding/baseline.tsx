@@ -1,57 +1,102 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/colors';
-import { scorePGSI } from '../../src/utils/scoring';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { Colors } from '@/constants/colors';
+import { PGSI_ITEMS, PGSI_SCALE } from '@/constants/pgsi';
+import { scorePGSI } from '@/utils/scoring';
+import { useAppContext } from '@/hooks/useAppContext';
+import OnboardingScaffold, { OnboardingCTA, PopIn } from '@/components/onboarding/OnboardingScaffold';
 
-// Step 3 — a short baseline assessment. This first score is stored as the
-// baseline the app later measures its own influence against (README §10.4).
-// Three sample PGSI-style items shown here; the full 9-item PGSI plugs in the
-// same way once the instrument is seeded in Supabase.
-const ITEMS = [
-  'Have you bet more than you could really afford to lose?',
-  'Have you felt guilty about the way you gamble?',
-  'Has gambling caused you any financial problems?',
-];
+// A gauge with its needle at the start line - this step measures where the
+// journey begins, nothing more.
+function GaugeIllustration() {
+  return (
+    <Svg width={116} height={116} viewBox="0 0 120 120" fill="none">
+      <Circle cx="60" cy="66" r="52" fill={Colors.secondary} fillOpacity="0.12" />
+      {/* dial segments: calm → caution → high */}
+      <Path d="M26 68 A34 34 0 0 1 43 38.6" stroke="#8fc4aa" strokeWidth="10" strokeLinecap="round" fill="none" />
+      <Path d="M43 38.6 A34 34 0 0 1 77 38.6" stroke="#f2dca8" strokeWidth="10" strokeLinecap="round" fill="none" />
+      <Path d="M77 38.6 A34 34 0 0 1 94 68" stroke="#f2c2c0" strokeWidth="10" strokeLinecap="round" fill="none" />
+      {/* needle resting at the start */}
+      <Path d="M60 68 L39 57" stroke={Colors.text} strokeWidth="3.5" strokeLinecap="round" />
+      <Circle cx="60" cy="68" r="6" fill={Colors.text} />
+      <Circle cx="60" cy="68" r="2.5" fill="#ffffff" />
+      {/* start flag */}
+      <Path d="M26 84v-12" stroke={Colors.secondaryDark} strokeWidth="2" strokeLinecap="round" />
+      <Path d="M26 72h9l-2.5 3 2.5 3h-9" fill={Colors.secondaryDark} />
+    </Svg>
+  );
+}
 
-const OPTIONS = [
-  { label: 'Never', value: 0 },
-  { label: 'Sometimes', value: 1 },
-  { label: 'Most of the time', value: 2 },
-  { label: 'Almost always', value: 3 },
-];
-
+// Step 3 - the baseline assessment: the full 9-item PGSI. This first score is
+// stored (is_baseline = true) as the starting line the app later measures its
+// own influence against (README §10.4).
 export default function BaselineScreen() {
   const router = useRouter();
-  const [answers, setAnswers] = useState<number[]>(Array(ITEMS.length).fill(-1));
+  const { submitPGSI } = useAppContext();
+  const [answers, setAnswers] = useState<number[]>(Array(PGSI_ITEMS.length).fill(-1));
+  const [saving, setSaving] = useState(false);
 
   const setAnswer = (itemIndex: number, value: number) =>
     setAnswers((prev) => prev.map((a, i) => (i === itemIndex ? value : a)));
 
-  const allAnswered = answers.every((a) => a >= 0);
+  const answeredCount = answers.filter((a) => a >= 0).length;
+  const allAnswered = answeredCount === PGSI_ITEMS.length;
   const result = allAnswered ? scorePGSI(answers) : null;
 
-  return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.body}>
-        <Text style={styles.step}>STEP 3 OF 3</Text>
-        <Text style={styles.title}>A quick baseline</Text>
-        <Text style={styles.subtitle}>
-          Over the past 12 months… Your honest answer here becomes the starting
-          line we measure progress from.
-        </Text>
+  const finish = async () => {
+    if (!allAnswered || saving) return;
+    setSaving(true);
+    try {
+      await submitPGSI(answers, true);
+    } catch {
+      // Don't trap the user in onboarding over a network hiccup - the PGSI
+      // can be retaken from inside the app.
+    } finally {
+      setSaving(false);
+    }
+    router.replace('/(tabs)/home');
+  };
 
-        {ITEMS.map((item, i) => (
-          <View key={item} style={styles.card}>
-            <Text style={styles.question}>{item}</Text>
+  return (
+    <OnboardingScaffold
+      step={3}
+      title="A quick baseline"
+      subtitle="Thinking about the past 12 months… honest answers become the starting line we measure progress from. A self-check, not a diagnosis."
+      illustration={<GaugeIllustration />}
+      footer={
+        <OnboardingCTA
+          label={saving ? 'Saving…' : 'Finish setup'}
+          disabled={!allAnswered || saving}
+          onPress={finish}
+        />
+      }
+    >
+      {/* Live progress chip */}
+      <View style={[styles.countChip, allAnswered && styles.countChipDone]}>
+        <Text style={[styles.countChipText, allAnswered && styles.countChipTextDone]}>
+          {allAnswered ? 'All questions answered' : `${answeredCount} of ${PGSI_ITEMS.length} answered`}
+        </Text>
+      </View>
+
+      {PGSI_ITEMS.map((item, i) => (
+        <PopIn key={item.id} index={i}>
+          <View style={[styles.card, answers[i] >= 0 && styles.cardAnswered]}>
+            <Text style={styles.qNum}>QUESTION {i + 1} OF {PGSI_ITEMS.length}</Text>
+            <Text style={styles.question}>{item.prompt}</Text>
             <View style={styles.optionsRow}>
-              {OPTIONS.map((opt) => {
+              {PGSI_SCALE.map((opt) => {
                 const on = answers[i] === opt.value;
                 return (
                   <TouchableOpacity
-                    key={opt.label}
+                    key={opt.value}
                     style={[styles.option, on && styles.optionOn]}
                     onPress={() => setAnswer(i, opt.value)}
+                    activeOpacity={0.7}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`${item.prompt} - ${opt.label}`}
                   >
                     <Text style={[styles.optionText, on && styles.optionTextOn]}>{opt.label}</Text>
                   </TouchableOpacity>
@@ -59,36 +104,49 @@ export default function BaselineScreen() {
               })}
             </View>
           </View>
-        ))}
+        </PopIn>
+      ))}
 
-        {result && (
+      {result && (
+        <PopIn>
           <View style={styles.resultCard}>
-            <Text style={styles.resultLabel}>Baseline recorded</Text>
+            <Text style={styles.resultLabel}>YOUR BASELINE</Text>
             <Text style={styles.resultText}>
-              {result.category} · score {result.totalScore}
+              {result.category} · score {result.totalScore} / 27
+            </Text>
+            <Text style={styles.resultSub}>
+              Wherever this lands, it's just the starting point - the app measures
+              your progress from here.
             </Text>
           </View>
-        )}
-      </View>
-
-      <TouchableOpacity
-        style={[styles.next, !allAnswered && styles.nextDisabled]}
-        disabled={!allAnswered}
-        onPress={() => router.replace('/(tabs)/home')}
-      >
-        <Text style={styles.nextText}>Finish setup</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+        </PopIn>
+      )}
+    </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.bg, padding: 24, justifyContent: 'space-between' },
-  body: { flex: 1, paddingTop: 24 },
-  step: { fontSize: 12, fontWeight: '700', color: Colors.primary, letterSpacing: 1, marginBottom: 8 },
-  title: { fontSize: 26, fontWeight: '700', color: Colors.text, marginBottom: 8, letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: Colors.textMuted, lineHeight: 22, marginBottom: 20 },
-  card: { backgroundColor: Colors.bgCard, borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: Colors.border },
+  countChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(91,155,213,0.12)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginBottom: 14,
+  },
+  countChipDone: { backgroundColor: 'rgba(122,184,154,0.18)' },
+  countChipText: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark },
+  countChipTextDone: { color: Colors.secondaryDark },
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  cardAnswered: { borderColor: Colors.secondaryLight },
+  qNum: { fontSize: 10, fontWeight: '700', color: Colors.primary, letterSpacing: 1, marginBottom: 6 },
   question: { fontSize: 15, fontWeight: '600', color: Colors.text, marginBottom: 12, lineHeight: 21 },
   optionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   option: { borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
@@ -96,9 +154,7 @@ const styles = StyleSheet.create({
   optionText: { fontSize: 13, color: Colors.textMuted },
   optionTextOn: { color: Colors.white, fontWeight: '600' },
   resultCard: { backgroundColor: Colors.secondaryLight, borderRadius: 16, padding: 16, marginTop: 4 },
-  resultLabel: { fontSize: 12, fontWeight: '700', color: Colors.secondaryDark, letterSpacing: 1, marginBottom: 4 },
-  resultText: { fontSize: 15, color: Colors.text, fontWeight: '600' },
-  next: { backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 17, alignItems: 'center' },
-  nextDisabled: { backgroundColor: Colors.primaryLight },
-  nextText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  resultLabel: { fontSize: 11, fontWeight: '700', color: Colors.secondaryDark, letterSpacing: 1, marginBottom: 4 },
+  resultText: { fontSize: 16, color: Colors.text, fontWeight: '700' },
+  resultSub: { fontSize: 12.5, color: Colors.secondaryDark, lineHeight: 18, marginTop: 6 },
 });

@@ -1,29 +1,47 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Switch } from 'react-native';
-import { Colors } from '../../constants/colors';
-import type { NotificationPreferences } from '../../src/types/notification';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Switch } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/colors';
+import BackHeader from '@/components/ui/BackHeader';
+import type { NotificationPreferences } from '@/types/notification';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  getNotificationPreferences,
+  saveNotificationPreferences,
+} from '@/services/notification.service';
 
-// Opt in/out of each notification type. These map to the columns in
-// `notification_preferences` (README §14).
+// Opt in/out of each notification type. Persists to `notification_preferences`
+// (README §14); toggling the weekly check-in also (un)schedules the recurring
+// Sunday-evening local notification.
 const ROWS: { key: keyof NotificationPreferences; label: string; desc: string }[] = [
   { key: 'mathEngine', label: 'Math-engine insights', desc: 'Opportunity-cost and spending math from your own data' },
   { key: 'checklist', label: 'Daily checklist', desc: 'A short actionable list to keep the habit loop healthy' },
-  { key: 'weeklyCheckin', label: 'Weekly check-in', desc: 'The recurring questionnaire that tracks your progress' },
+  { key: 'weeklyCheckin', label: 'Weekly check-in', desc: 'The recurring questionnaire that tracks your progress (Sunday 7 PM)' },
 ];
 
 export default function NotificationsScreen() {
+  const { user } = useAuth();
   const [prefs, setPrefs] = useState<NotificationPreferences>({
     mathEngine: true,
     checklist: true,
     weeklyCheckin: true,
   });
 
-  const toggle = (key: keyof NotificationPreferences) =>
-    setPrefs((p) => ({ ...p, [key]: !p[key] }));
+  useEffect(() => {
+    getNotificationPreferences()
+      .then((saved) => saved && setPrefs(saved))
+      .catch(() => {});
+  }, []);
+
+  const toggle = (key: keyof NotificationPreferences) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    if (user) saveNotificationPreferences(user.id, next).catch(() => {});
+  };
 
   return (
     <SafeAreaView style={styles.root}>
-      <Text style={styles.title}>Notifications</Text>
+      <BackHeader title="Notifications" />
       <View style={styles.group}>
         {ROWS.map((row, i) => (
           <View key={row.key}>

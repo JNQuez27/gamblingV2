@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/colors';
+import BackHeader from '@/components/ui/BackHeader';
 
 // Plain-language summary of how the app handles data. Reinforces the
 // non-judgmental, privacy-first framing (README §1).
 const POINTS = [
-  { title: 'Your data is yours', body: 'Everything you log is protected by row-level security — only your account can read it.' },
+  { title: 'Your data is yours', body: 'Everything you log is protected by row-level security - only your account can read it.' },
   { title: 'Nothing runs in the background', body: 'We cannot see which apps you open. All gambling-usage data is what you choose to report.' },
   { title: 'Secrets stay server-side', body: 'API keys never live in the app. The anon key you carry can only reach your own rows.' },
   { title: 'You can delete everything', body: 'Removing your account cascades to every table and erases your history.' },
@@ -15,7 +17,7 @@ export default function PrivacyScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Privacy</Text>
+        <BackHeader title="Privacy" />
         {POINTS.map((p) => (
           <View key={p.title} style={styles.card}>
             <Text style={styles.cardTitle}>{p.title}</Text>

@@ -5,12 +5,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Ellipse, Line, Path, Rect } from 'react-native-svg';
-import { Colors } from '../constants/colors';
+import { Colors } from '@/constants/colors';
 
 const { width } = Dimensions.get('window');
 
@@ -78,7 +78,7 @@ const slides = [
     Illustration: AwarenessIllustration,
     tag: 'Awareness',
     title: 'See yourself clearly.',
-    body: 'The first step toward change is noticing what\'s happening inside you — without judgment.',
+    body: 'The first step toward change is noticing what\'s happening inside you - without judgment.',
   },
   {
     id: 1,
@@ -121,7 +121,13 @@ export default function SplashScreen() {
         {/* Skip */}
         <View style={styles.skipRow}>
           {!isLast && (
-            <TouchableOpacity onPress={() => router.replace('/login')} hitSlop={12}>
+            <TouchableOpacity
+              onPress={() => router.replace('/login')}
+              hitSlop={12}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Skip introduction"
+            >
               <Text style={styles.skip}>Skip</Text>
             </TouchableOpacity>
           )}
@@ -150,7 +156,14 @@ export default function SplashScreen() {
           {/* Dots */}
           <View style={styles.dotsRow}>
             {slides.map((_, i) => (
-              <TouchableOpacity key={i} onPress={() => setCurrent(i)} hitSlop={8}>
+              <TouchableOpacity
+                key={i}
+                onPress={() => setCurrent(i)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Go to slide ${i + 1} of ${slides.length}`}
+                accessibilityState={{ selected: i === current }}
+              >
                 <View style={[styles.dot, i === current && styles.dotActive]} />
               </TouchableOpacity>
             ))}
@@ -163,7 +176,13 @@ export default function SplashScreen() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            <TouchableOpacity onPress={goNext} style={styles.btnTouchable}>
+            <TouchableOpacity
+              onPress={goNext}
+              style={styles.btnTouchable}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={isLast ? 'Get started' : 'Continue to next slide'}
+            >
               <Text style={styles.btnText}>{isLast ? 'Get Started' : 'Continue'}</Text>
             </TouchableOpacity>
           </LinearGradient>

@@ -1,55 +1,33 @@
-// The "is the app actually working?" measure. It compares a baseline snapshot
-// (captured at onboarding) against the latest one across three metrics, all of
-// which should go DOWN if the app is helping.
+import type { InfluenceMetrics, InfluenceResult } from '@/types/influence';
 
-export interface InfluenceSnapshot {
-  pgsiScore: number;
-  weeklySpend: number;
-  weeklyOpenCount: number;
+// The "is the app actually working?" measure (README §10.4). Compares the
+// user's first tracked week against now across three metrics - PGSI score,
+// weekly spend, weekly app-opens - all of which go DOWN if the app is helping.
+
+// % improvement for one metric, clamped to ±100. null when the metric can't
+// be compared (no data on either side, or a zero baseline to divide by).
+function pctImprovement(baseline: number | null, current: number | null): number | null {
+  if (baseline == null || current == null || baseline <= 0) return null;
+  const pct = ((baseline - current) / baseline) * 100;
+  return Math.max(-100, Math.min(100, Math.round(pct)));
 }
 
-export interface InfluenceDelta {
-  metric: 'pgsi' | 'spend' | 'opens';
-  baseline: number;
-  current: number;
-  percentChange: number;   // negative = improvement
-  improved: boolean;
-}
+// The influence index is signed on purpose: a user doing worse than their
+// first week sees a negative number, not a flattering zero.
+export function computeInfluence(
+  baseline: InfluenceMetrics,
+  current: InfluenceMetrics,
+): InfluenceResult {
+  const pgsiPct = pctImprovement(baseline.pgsiScore, current.pgsiScore);
+  const spendPct = pctImprovement(baseline.weeklySpend, current.weeklySpend);
+  const opensPct = pctImprovement(baseline.weeklyOpenCount, current.weeklyOpenCount);
 
-function percentChange(baseline: number, current: number): number {
-  if (baseline === 0) return current === 0 ? 0 : 100;
-  return Math.round(((current - baseline) / baseline) * 100);
-}
-
-export function computeDeltas(
-  baseline: InfluenceSnapshot,
-  current: InfluenceSnapshot,
-): InfluenceDelta[] {
-  const build = (
-    metric: InfluenceDelta['metric'],
-    b: number,
-    c: number,
-  ): InfluenceDelta => {
-    const change = percentChange(b, c);
-    return { metric, baseline: b, current: c, percentChange: change, improved: c < b };
+  const parts = [pgsiPct, spendPct, opensPct].filter((p): p is number => p !== null);
+  return {
+    pgsiPct,
+    spendPct,
+    opensPct,
+    metricsUsed: parts.length,
+    index: parts.length ? Math.round(parts.reduce((sum, p) => sum + p, 0) / parts.length) : null,
   };
-
-  return [
-    build('pgsi', baseline.pgsiScore, current.pgsiScore),
-    build('spend', baseline.weeklySpend, current.weeklySpend),
-    build('opens', baseline.weeklyOpenCount, current.weeklyOpenCount),
-  ];
-}
-
-// A single 0–100 "influence index": the average improvement across the three
-// metrics, clamped to 0. Higher means the app moved the user further.
-export function influenceIndex(
-  baseline: InfluenceSnapshot,
-  current: InfluenceSnapshot,
-): number {
-  const improvements = computeDeltas(baseline, current).map((d) =>
-    Math.max(0, -d.percentChange),
-  );
-  const avg = improvements.reduce((a, b) => a + b, 0) / improvements.length;
-  return Math.min(100, Math.round(avg));
 }

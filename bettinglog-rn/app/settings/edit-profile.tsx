@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/colors';
-import { useAuth } from '../../src/core/hooks/useAuth';
+import { Colors } from '@/constants/colors';
+import { useAuth } from '@/hooks/useAuth';
+import BackHeader from '@/components/ui/BackHeader';
 
 // Edit the display name and bio stored in the `profiles` table.
 export default function EditProfileScreen() {
@@ -13,7 +15,7 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <Text style={styles.title}>Edit profile</Text>
+      <BackHeader title="Edit profile" />
 
       <View style={styles.field}>
         <Text style={styles.label}>DISPLAY NAME</Text>

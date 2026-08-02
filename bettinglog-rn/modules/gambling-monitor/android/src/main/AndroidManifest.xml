@@ -1,0 +1,38 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+  <!-- Special permission: the user grants it manually in Settings → Usage Access
+       (requestPermissions() deep-links there). Declared so the toggle appears. -->
+  <uses-permission
+      android:name="android.permission.PACKAGE_USAGE_STATS"
+      tools:ignore="ProtectedPermissions" />
+
+  <!-- Foreground service that polls UsageStatsManager. dataSync type is
+       required on Android 14+ (targetSdk 34). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+  <!-- The website shield (VpnService) runs as a special-use foreground service. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+  <application>
+    <service
+        android:name="expo.modules.gamblingmonitor.GamblingMonitorService"
+        android:exported="false"
+        android:foregroundServiceType="dataSync" />
+
+    <!-- Local DNS-inspecting VPN (Mechanism 3). BIND_VPN_SERVICE lets only the
+         system bind it; the android.net.VpnService intent-filter is required. -->
+    <service
+        android:name="expo.modules.gamblingmonitor.GamblingVpnService"
+        android:exported="false"
+        android:permission="android.permission.BIND_VPN_SERVICE"
+        android:foregroundServiceType="specialUse">
+      <property
+          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="on-device gambling-site DNS filter for recovery support" />
+      <intent-filter>
+        <action android:name="android.net.VpnService" />
+      </intent-filter>
+    </service>
+  </application>
+</manifest>

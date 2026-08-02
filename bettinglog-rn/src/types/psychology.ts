@@ -25,7 +25,7 @@ export interface AssessmentScore {
   totalScore: number;
   riskLevel: RiskLevel;
   category: string;
-  isBaseline: boolean;   // first run — used by the influence measure
+  isBaseline: boolean;   // first run - used by the influence measure
   completedAt: string;
 }
 

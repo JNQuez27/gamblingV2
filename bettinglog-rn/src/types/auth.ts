@@ -5,4 +5,5 @@ export interface AuthUser {
   email: string;
   displayName: string | null;
   avatarUrl: string | null;
+  createdAt: string | null;   // account creation (Supabase Auth), ISO timestamp
 }

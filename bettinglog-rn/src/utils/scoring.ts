@@ -1,4 +1,4 @@
-import type { RiskLevel } from '../types/psychology';
+import type { RiskLevel } from '@/types/psychology';
 
 // PGSI (Problem Gambling Severity Index) scoring. The PGSI is a validated
 // 9-item instrument; each item scores 0–3, so the total runs 0–27.

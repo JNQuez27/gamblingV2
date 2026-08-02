@@ -4,7 +4,6 @@
     "slug": "bettinglog",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "bettinglog",
     "splash": {
@@ -24,7 +23,8 @@
     "plugins": [
       "expo-router",
       "expo-system-ui",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withGamblingAppQueries"
     ],
     "experiments": {
       "typedRoutes": true

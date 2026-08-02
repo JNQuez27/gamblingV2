@@ -1,11 +1,11 @@
-import { buildSpendingSummary, sumSpend } from './spendingEngine';
-import type { SpendingLog } from '../types/spending';
+import { buildSpendingSummary, sumSpend, weeklySpendByDay } from '@/utils/spendingEngine';
+import type { SpendingLog } from '@/types/spending';
 
-const log = (amount: number): SpendingLog => ({
+const log = (amount: number, loggedAt = new Date().toISOString()): SpendingLog => ({
   id: Math.random().toString(),
   amount,
   note: null,
-  loggedAt: new Date().toISOString(),
+  loggedAt,
 });
 
 describe('spendingEngine', () => {
@@ -31,5 +31,22 @@ describe('spendingEngine', () => {
     const summary = buildSpendingSummary(0, [log(500)]);
     expect(summary.percentUsed).toBe(0);
     expect(summary.isCritical).toBe(false);
+  });
+
+  it('buckets this week Mon..Sun and sums same-day logs', () => {
+    // 2026-07-16 is a Thursday; that week runs Mon 07-13 → Sun 07-19.
+    const now = new Date('2026-07-16T12:00:00');
+    const logs = [
+      log(100, '2026-07-13T09:00:00'), // Monday
+      log(40, '2026-07-16T10:00:00'),  // Thursday
+      log(60, '2026-07-16T20:00:00'),  // Thursday again - should sum
+      log(999, '2026-07-12T23:00:00'), // Sunday of the PREVIOUS week - excluded
+      log(999, '2026-07-20T00:00:00'), // Monday of the NEXT week - excluded
+    ];
+    expect(weeklySpendByDay(logs, now)).toEqual([100, 0, 0, 100, 0, 0, 0]);
+  });
+
+  it('returns all zeros for no logs', () => {
+    expect(weeklySpendByDay([], new Date('2026-07-16T12:00:00'))).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 });

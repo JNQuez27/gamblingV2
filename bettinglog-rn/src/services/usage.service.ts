@@ -1,5 +1,5 @@
-import { supabase } from './supabase';
-import type { GamblingUsageLog } from '../types/usage';
+import { supabase } from '@/services/supabase';
+import type { GamblingUsageLog } from '@/types/usage';
 
 function fromRow(row: any): GamblingUsageLog {
   return {

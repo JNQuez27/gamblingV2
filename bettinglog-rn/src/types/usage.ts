@@ -1,4 +1,4 @@
-import type { GamblingCategory } from '../../constants/gamblingApps';
+import type { GamblingCategory } from '@/constants/gamblingApps';
 
 // One self-reported "I opened a gambling app" record for a given day.
 export interface GamblingUsageLog {
@@ -19,5 +19,5 @@ export interface RankedApp {
   rank: number;         // 1..N
 }
 
-// How heavy the opening habit is — decided by src/utils/thresholdEngine.ts.
+// How heavy the opening habit is - decided by src/utils/thresholdEngine.ts.
 export type UsageBand = 'controlled' | 'elevated' | 'high' | 'severe';

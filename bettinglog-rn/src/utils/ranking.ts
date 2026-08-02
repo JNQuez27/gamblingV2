@@ -1,4 +1,4 @@
-import type { GamblingUsageLog, RankedApp } from '../types/usage';
+import type { GamblingUsageLog, RankedApp } from '@/types/usage';
 
 // Rolls up usage logs per app and returns the most-used apps, highest first.
 // The UI shows the top 3 so intervention focuses where the habit is strongest.

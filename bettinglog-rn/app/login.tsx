@@ -9,15 +9,15 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { Colors } from '../constants/colors';
-import { useAuth } from '../src/core/hooks/useAuth';
-import { signUpWithEmail } from '../src/services/auth.service';
-import { supabase } from '../src/services/supabase';
+import { Colors } from '@/constants/colors';
+import { useAuth } from '@/hooks/useAuth';
+import { signUpWithEmail } from '@/services/auth.service';
+import { supabase } from '@/services/supabase';
 
 type AuthMode = 'login' | 'signup';
 
@@ -39,8 +39,8 @@ export default function LoginScreen() {
         await signIn(email.trim(), password);
         router.replace('/(tabs)/home');
       } else {
-        // New account → sign up, then walk through onboarding.
-        await signUpWithEmail(email.trim(), password);
+        // New account: sign up with the chosen username, then onboarding.
+        await signUpWithEmail(email.trim(), password, name.trim());
         await signIn(email.trim(), password);
         router.replace('/onboarding/problem');
       }
@@ -58,6 +58,18 @@ export default function LoginScreen() {
       await supabase.auth.signInWithOAuth({ provider: 'google' });
     } catch (e: any) {
       setError(e?.message ?? 'Google sign-in is not available yet.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFacebook = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await supabase.auth.signInWithOAuth({ provider: 'facebook' });
+    } catch (e: any) {
+      setError(e?.message ?? 'Facebook sign-in is not available yet.');
     } finally {
       setLoading(false);
     }
@@ -87,7 +99,15 @@ export default function LoginScreen() {
               {/* Mode toggle */}
               <View style={styles.toggle}>
                 {(['login', 'signup'] as AuthMode[]).map((m) => (
-                  <TouchableOpacity key={m} onPress={() => setMode(m)} style={[styles.toggleBtn, mode === m && styles.toggleBtnActive]}>
+                  <TouchableOpacity
+                    key={m}
+                    onPress={() => setMode(m)}
+                    style={[styles.toggleBtn, mode === m && styles.toggleBtnActive]}
+                    activeOpacity={0.8}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: mode === m }}
+                    accessibilityLabel={m === 'login' ? 'Log in' : 'Sign up'}
+                  >
                     <Text style={[styles.toggleText, mode === m && styles.toggleTextActive]}>
                       {m === 'login' ? 'Log In' : 'Sign Up'}
                     </Text>
@@ -95,9 +115,16 @@ export default function LoginScreen() {
                 ))}
               </View>
 
-              {/* OAuth — Google only (v4.0) */}
+              {/* OAuth - Google only (v4.0) */}
               <View style={styles.oauthGroup}>
-                <TouchableOpacity onPress={handleGoogle} disabled={loading} style={styles.oauthBtn}>
+                <TouchableOpacity
+                  onPress={handleGoogle}
+                  disabled={loading}
+                  style={styles.oauthBtn}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Google"
+                >
                   <Svg width={20} height={20} viewBox="0 0 24 24">
                     <Path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <Path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -105,6 +132,23 @@ export default function LoginScreen() {
                     <Path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                   </Svg>
                   <Text style={styles.oauthText}>Continue with Google</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleFacebook}
+                  disabled={loading}
+                  style={styles.oauthBtnFacebook}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Facebook"
+                >
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M15.12 8.5h1.97V5.7c-.34-.05-1.5-.16-2.86-.16-2.83 0-4.77 1.73-4.77 4.9v2.2H6.4v3.1h3.06V22h3.66v-6.26h2.88l.46-3.1h-3.34v-1.9c0-.9.25-1.5 1.54-1.5z"
+                      fill="#ffffff"
+                    />
+                  </Svg>
+                  <Text style={styles.oauthFacebookText}>Continue with Facebook</Text>
                 </TouchableOpacity>
               </View>
 
@@ -119,14 +163,15 @@ export default function LoginScreen() {
               <View style={styles.form}>
                 {mode === 'signup' && (
                   <View style={styles.field}>
-                    <Text style={styles.label}>FULL NAME</Text>
+                    <Text style={styles.label}>USERNAME</Text>
                     <TextInput
                       style={styles.input}
                       value={name}
                       onChangeText={setName}
-                      placeholder="Your name"
+                      placeholder="Choose a username"
                       placeholderTextColor={Colors.textLight}
-                      autoCapitalize="words"
+                      autoCapitalize="none"
+                      autoCorrect={false}
                     />
                   </View>
                 )}
@@ -149,7 +194,11 @@ export default function LoginScreen() {
                   <View style={styles.passwordHeader}>
                     <Text style={styles.label}>PASSWORD</Text>
                     {mode === 'login' && (
-                      <TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.6}
+                        accessibilityRole="button"
+                        accessibilityLabel="Forgot password"
+                      >
                         <Text style={styles.forgot}>Forgot?</Text>
                       </TouchableOpacity>
                     )}
@@ -172,7 +221,15 @@ export default function LoginScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <TouchableOpacity onPress={handleSubmit} disabled={loading} style={styles.submitTouchable}>
+                  <TouchableOpacity
+                    onPress={handleSubmit}
+                    disabled={loading}
+                    style={styles.submitTouchable}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={mode === 'login' ? 'Log in' : 'Create account'}
+                    accessibilityState={{ disabled: loading, busy: loading }}
+                  >
                     {loading ? (
                       <ActivityIndicator color={Colors.white} />
                     ) : (
@@ -255,6 +312,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   oauthText: { fontSize: 15, fontWeight: '500', color: Colors.text },
+  oauthBtnFacebook: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#1877F2',
+  },
+  oauthFacebookText: { fontSize: 15, fontWeight: '500', color: Colors.white },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: { fontSize: 13, color: Colors.textLight },

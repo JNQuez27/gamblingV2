@@ -1,5 +1,5 @@
-import { supabase } from './supabase';
-import type { SpendingLimit, SpendingLog } from '../types/spending';
+import { supabase } from '@/services/supabase';
+import type { SpendingLimit, SpendingLog } from '@/types/spending';
 
 export async function getSpendingLimit(): Promise<SpendingLimit | null> {
   const { data, error } = await supabase

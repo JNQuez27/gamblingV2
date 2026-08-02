@@ -1,16 +1,11 @@
-import type { SpendingSummary } from '../types/spending';
+import type { SpendingSummary } from '@/types/spending';
+import { REFERENCE_COSTS } from '@/constants/phPrices';
 
 // Replaces motivational quotes with personal, numeric, opportunity-cost
 // messages built from the user's own data. Every function here is pure and
 // returns a plain string the notification/UI layer can display.
-
-// Rough PH reference costs used to translate pesos into concrete alternatives.
-// Deliberately conservative and easy to tweak.
-const REFERENCE_COSTS = {
-  monthGroceries: 6000, // ₱ for a month of basic groceries
-  jeepneyFare: 15,      // ₱ per ride
-  riceKilo: 55,         // ₱ per kilo
-};
+// PH reference costs live in constants/phPrices.ts (single source of truth,
+// alongside the PAGCOR-anchored bet sizes).
 
 export function peso(amount: number): string {
   return `₱${Math.round(amount).toLocaleString('en-PH')}`;
@@ -31,12 +26,12 @@ export function yearlyProjection(weeklySpend: number): string {
   return `At ${peso(weeklySpend)}/week you're on track for ${peso(weeklySpend * 52)} this year.`;
 }
 
-// "You're at 85% of your ₱5,000 limit — ₱750 left."
+// "You're at 85% of your ₱5,000 limit - ₱750 left."
 export function limitProximity(summary: SpendingSummary): string {
   if (summary.isOverLimit) {
     return `You're ${peso(summary.current - summary.limit)} over your ${peso(summary.limit)} limit.`;
   }
-  return `You're at ${summary.percentUsed}% of your ${peso(summary.limit)} limit — ${peso(summary.remaining)} left.`;
+  return `You're at ${summary.percentUsed}% of your ${peso(summary.limit)} limit - ${peso(summary.remaining)} left.`;
 }
 
 // "You opened gambling apps 34× this week, up 21% from last week."
@@ -49,7 +44,7 @@ export function frequencyMath(thisWeek: number, lastWeek: number): string {
   return `You opened gambling apps ${thisWeek}× this week, ${direction} from last week.`;
 }
 
-// Law of Effect — surface the satisfying outcome of restraint.
+// Law of Effect - surface the satisfying outcome of restraint.
 // "3 days without gambling = ₱1,200 kept."
 export function savingsReinforcement(cleanDays: number, dailyAverageSpend: number): string {
   return `${cleanDays} day(s) without gambling = ${peso(cleanDays * dailyAverageSpend)} kept.`;

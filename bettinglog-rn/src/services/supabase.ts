@@ -7,12 +7,68 @@ import * as SecureStore from 'expo-secure-store';
 //
 // On Android (the production target) tokens live in the device's encrypted
 // SecureStore. SecureStore is native-only, so for the browser dev-preview
-// (`npm run dev`) we fall back to localStorage — enough to click through the
+// (`npm run dev`) we fall back to localStorage - enough to click through the
 // UI without crashing. Production is always Android.
+//
+// IMPORTANT: SecureStore rejects values larger than 2048 bytes on Android. A
+// Supabase session (access-token JWT + refresh token + user object with
+// user_metadata) easily exceeds that, so a plain setItemAsync fails silently
+// and the session is never saved - which is why the app used to demand a fresh
+// login on every launch. The adapter below transparently splits large values
+// into <2048-byte chunks (key.0, key.1, ...) with a small header under the main
+// key, and reassembles them on read.
+const CHUNK_SIZE = 1800; // headroom under SecureStore's 2048-byte limit
+const CHUNK_HEADER = '__sbchunks__:'; // marks a chunked value in the main key
+
 const nativeAdapter = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+  getItem: async (key: string) => {
+    const head = await SecureStore.getItemAsync(key);
+    if (head == null) return null;
+    // Legacy / small values were stored raw - return them untouched.
+    if (!head.startsWith(CHUNK_HEADER)) return head;
+
+    const count = parseInt(head.slice(CHUNK_HEADER.length), 10);
+    if (!Number.isFinite(count) || count <= 0) return null;
+
+    const parts: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const part = await SecureStore.getItemAsync(`${key}.${i}`);
+      if (part == null) return null; // corrupt/partial write - treat as no session
+      parts.push(part);
+    }
+    return parts.join('');
+  },
+
+  setItem: async (key: string, value: string) => {
+    // Remove any chunks left over from a previous, larger value.
+    const prevHead = await SecureStore.getItemAsync(key);
+    if (prevHead?.startsWith(CHUNK_HEADER)) {
+      const prevCount = parseInt(prevHead.slice(CHUNK_HEADER.length), 10) || 0;
+      for (let i = 0; i < prevCount; i++) {
+        await SecureStore.deleteItemAsync(`${key}.${i}`);
+      }
+    }
+
+    const chunks: string[] = [];
+    for (let i = 0; i < value.length; i += CHUNK_SIZE) {
+      chunks.push(value.slice(i, i + CHUNK_SIZE));
+    }
+    for (let i = 0; i < chunks.length; i++) {
+      await SecureStore.setItemAsync(`${key}.${i}`, chunks[i]);
+    }
+    await SecureStore.setItemAsync(key, `${CHUNK_HEADER}${chunks.length}`);
+  },
+
+  removeItem: async (key: string) => {
+    const head = await SecureStore.getItemAsync(key);
+    if (head?.startsWith(CHUNK_HEADER)) {
+      const count = parseInt(head.slice(CHUNK_HEADER.length), 10) || 0;
+      for (let i = 0; i < count; i++) {
+        await SecureStore.deleteItemAsync(`${key}.${i}`);
+      }
+    }
+    await SecureStore.deleteItemAsync(key);
+  },
 };
 
 const webAdapter = {

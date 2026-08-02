@@ -1,5 +1,5 @@
-import { supabase } from './supabase';
-import type { DiaryEntry } from '../types/diary';
+import { supabase } from '@/services/supabase';
+import type { DiaryEntry } from '@/types/diary';
 
 // Supabase returns snake_case columns; the app uses camelCase. These two
 // helpers are the only translation point.

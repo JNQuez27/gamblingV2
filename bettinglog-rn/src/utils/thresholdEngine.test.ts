@@ -1,4 +1,4 @@
-import { averageOpensPerDay, classifyUsage } from './thresholdEngine';
+import { averageOpensPerDay, classifyUsage } from '@/utils/thresholdEngine';
 
 describe('thresholdEngine', () => {
   it('averages opens over days', () => {

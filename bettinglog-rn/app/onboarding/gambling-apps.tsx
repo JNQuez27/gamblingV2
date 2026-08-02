@@ -1,14 +1,57 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/colors';
-import { GAMBLING_APP_PRESETS } from '../../constants/gamblingApps';
+import Svg, { Circle, Rect, Path } from 'react-native-svg';
+import { Colors } from '@/constants/colors';
+import { GAMBLING_APP_PRESETS } from '@/constants/gamblingApps';
+import { detectedAppNames } from '@/services/appDetection.service';
+import { IconSmartphone } from '@/components/ui/icons';
+import OnboardingScaffold, { OnboardingCTA, PopIn } from '@/components/onboarding/OnboardingScaffold';
 
-// Step 2 — which gambling apps/sites the user uses. Multi-select chips seeded
-// with common PH apps. This scopes what "usage" tracking will ask about later.
+// A phone with app tiles - one flagged - with soft "radar" rings: what this
+// step is about, at a glance.
+function PhoneIllustration() {
+  return (
+    <Svg width={116} height={116} viewBox="0 0 120 120" fill="none">
+      <Circle cx="60" cy="60" r="54" fill={Colors.primary} fillOpacity="0.12" />
+      <Circle cx="60" cy="60" r="42" stroke={Colors.primary} strokeOpacity="0.25" strokeWidth="1.5" strokeDasharray="3 6" />
+      {/* phone */}
+      <Rect x="39" y="22" width="42" height="76" rx="9" fill="#ffffff" stroke={Colors.primaryDark} strokeWidth="2.5" />
+      <Path d="M54 28h12" stroke={Colors.border} strokeWidth="2.5" strokeLinecap="round" />
+      {/* app tiles */}
+      <Rect x="46" y="36" width="12" height="12" rx="3.5" fill={Colors.primary} fillOpacity="0.75" />
+      <Rect x="62" y="36" width="12" height="12" rx="3.5" fill={Colors.secondary} fillOpacity="0.75" />
+      <Rect x="46" y="52" width="12" height="12" rx="3.5" fill={Colors.accent} fillOpacity="0.7" />
+      <Rect x="46" y="68" width="12" height="12" rx="3.5" fill={Colors.primaryLight} />
+      <Rect x="62" y="68" width="12" height="12" rx="3.5" fill={Colors.secondaryLight} />
+      {/* flagged gambling tile */}
+      <Rect x="62" y="52" width="12" height="12" rx="3.5" fill="#e59a9a" />
+      <Path d="M68 55.5v3.5" stroke="#7c2d2d" strokeWidth="1.8" strokeLinecap="round" />
+      <Circle cx="68" cy="61.4" r="0.9" fill="#7c2d2d" />
+      {/* radar ping on the flagged tile */}
+      <Circle cx="68" cy="58" r="12" stroke="#d98383" strokeOpacity="0.55" strokeWidth="1.5" />
+      <Circle cx="68" cy="58" r="18" stroke="#d98383" strokeOpacity="0.25" strokeWidth="1.5" />
+    </Svg>
+  );
+}
+
+// Step 2 - which gambling apps/sites the user uses. Multi-select chips seeded
+// with common PH apps. When the native monitor reports installed apps they're
+// pre-selected and badged; self-report remains the source of truth.
 export default function GamblingAppsScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState<string[]>([]);
+  const [detected, setDetected] = useState<string[]>([]);
+
+  useEffect(() => {
+    detectedAppNames()
+      .then((names) => {
+        setDetected(names);
+        // Pre-select what we found; the user can always deselect.
+        setSelected((prev) => [...new Set([...prev, ...names])]);
+      })
+      .catch(() => {});
+  }, []);
 
   const toggle = (name: string) =>
     setSelected((prev) =>
@@ -16,44 +59,73 @@ export default function GamblingAppsScreen() {
     );
 
   return (
-    <SafeAreaView style={styles.root}>
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        <Text style={styles.step}>STEP 2 OF 3</Text>
-        <Text style={styles.title}>Which apps do you use?</Text>
-        <Text style={styles.subtitle}>
-          Pick any that apply. We only track what you choose to report — nothing
-          runs in the background.
-        </Text>
+    <OnboardingScaffold
+      step={2}
+      title="Which apps do you use?"
+      subtitle="Pick any that apply - what you report here is the source of truth. You can add background monitoring later, always with your consent."
+      illustration={<PhoneIllustration />}
+      footer={
+        <OnboardingCTA
+          label={selected.length ? 'Continue' : 'Skip for now'}
+          onPress={() => router.push('/onboarding/baseline')}
+        />
+      }
+    >
+      {detected.length > 0 && (
+        <View style={styles.detectedNote}>
+          <IconSmartphone size={16} color={Colors.primaryDark} />
+          <Text style={styles.detectedNoteText}>
+            We noticed {detected.length} gambling app{detected.length === 1 ? '' : 's'} installed
+            on this device and pre-selected {detected.length === 1 ? 'it' : 'them'}.
+          </Text>
+        </View>
+      )}
 
-        <View style={styles.chips}>
-          {GAMBLING_APP_PRESETS.map((app) => {
-            const on = selected.includes(app.name);
-            return (
+      <View style={styles.chips}>
+        {GAMBLING_APP_PRESETS.map((app, i) => {
+          const on = selected.includes(app.name);
+          const wasDetected = detected.includes(app.name);
+          return (
+            <PopIn key={app.name} index={i}>
               <TouchableOpacity
-                key={app.name}
                 style={[styles.chip, on && styles.chipOn]}
                 onPress={() => toggle(app.name)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${app.name}${wasDetected ? ', installed on this device' : ''}`}
               >
-                <Text style={[styles.chipText, on && styles.chipTextOn]}>{app.name}</Text>
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                  {app.name}{wasDetected ? ' · installed' : ''}
+                </Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+            </PopIn>
+          );
+        })}
+      </View>
 
-      <TouchableOpacity style={styles.next} onPress={() => router.push('/onboarding/baseline')}>
-        <Text style={styles.nextText}>{selected.length ? 'Continue' : 'Skip for now'}</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+      {selected.length > 0 && (
+        <Text style={styles.countHint}>
+          {selected.length} selected - you can change this anytime in Settings.
+        </Text>
+      )}
+    </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.bg, padding: 24 },
-  body: { paddingTop: 24, paddingBottom: 16 },
-  step: { fontSize: 12, fontWeight: '700', color: Colors.primary, letterSpacing: 1, marginBottom: 8 },
-  title: { fontSize: 26, fontWeight: '700', color: Colors.text, marginBottom: 8, letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: Colors.textMuted, lineHeight: 22, marginBottom: 24 },
+  detectedNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  detectedNoteText: { flex: 1, fontSize: 13, color: '#78350f', lineHeight: 19 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: {
     backgroundColor: Colors.bgCard,
@@ -66,6 +138,5 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary },
   chipText: { fontSize: 14, color: Colors.text },
   chipTextOn: { color: Colors.primaryDark, fontWeight: '600' },
-  next: { backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 17, alignItems: 'center' },
-  nextText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  countHint: { fontSize: 12.5, color: Colors.textLight, marginTop: 16 },
 });

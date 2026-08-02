@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '../../constants/colors';
+import { Colors } from '@/constants/colors';
+import Mascot from '@/components/ui/Mascot';
+import OnboardingScaffold, { OnboardingCTA, PopIn } from '@/components/onboarding/OnboardingScaffold';
 
-// Step 1 of onboarding — capture the user's own words for why they are here.
-// Non-judgmental framing: this is a starting point, not a confession.
+// Step 1 of onboarding - capture the user's own words for why they are here.
+// Non-judgmental framing: this is a starting point, not a confession. Drip
+// (the mascot) does the greeting so the moment feels welcoming, not clinical.
 const SUGGESTIONS = [
   "I'm spending more than I want to",
-  "I open betting apps too often",
-  "I want to understand my habits",
-  "Someone I trust is worried about me",
+  'I open betting apps too often',
+  'I want to understand my habits',
+  'Someone I trust is worried about me',
 ];
 
 export default function ProblemScreen() {
@@ -17,51 +20,74 @@ export default function ProblemScreen() {
   const [text, setText] = useState('');
 
   return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.body}>
-        <Text style={styles.step}>STEP 1 OF 3</Text>
-        <Text style={styles.title}>What brings you here?</Text>
-        <Text style={styles.subtitle}>
-          There are no wrong answers. This just helps us meet you where you are.
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          value={text}
-          onChangeText={setText}
-          placeholder="Write it in your own words…"
-          placeholderTextColor={Colors.textLight}
-          multiline
-        />
-
-        <View style={styles.chips}>
-          {SUGGESTIONS.map((s) => (
-            <TouchableOpacity key={s} style={styles.chip} onPress={() => setText(s)}>
-              <Text style={styles.chipText}>{s}</Text>
-            </TouchableOpacity>
-          ))}
+    <OnboardingScaffold
+      step={1}
+      showBack={false}
+      title="What brings you here?"
+      subtitle="There are no wrong answers. This just helps us meet you where you are."
+      illustration={
+        <View style={styles.mascotCircle}>
+          <Mascot size={84} />
         </View>
-      </View>
+      }
+      footer={
+        <OnboardingCTA
+          label="Continue"
+          disabled={!text.trim()}
+          onPress={() => router.push('/onboarding/gambling-apps')}
+        />
+      }
+    >
+      <TextInput
+        style={styles.input}
+        value={text}
+        onChangeText={setText}
+        placeholder="Write it in your own words…"
+        placeholderTextColor={Colors.textLight}
+        multiline
+        accessibilityLabel="Why are you here, in your own words"
+      />
 
-      <TouchableOpacity
-        style={[styles.next, !text && styles.nextDisabled]}
-        disabled={!text}
-        onPress={() => router.push('/onboarding/gambling-apps')}
-      >
-        <Text style={styles.nextText}>Continue</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+      <Text style={styles.orLabel}>Or start from one of these</Text>
+      <View style={styles.chips}>
+        {SUGGESTIONS.map((s, i) => {
+          const on = text === s;
+          return (
+            <PopIn key={s} index={i}>
+              <TouchableOpacity
+                style={[styles.chip, on && styles.chipOn]}
+                onPress={() => setText(on ? '' : s)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={s}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>{s}</Text>
+              </TouchableOpacity>
+            </PopIn>
+          );
+        })}
+      </View>
+    </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.bg, padding: 24, justifyContent: 'space-between' },
-  body: { flex: 1, paddingTop: 24 },
-  step: { fontSize: 12, fontWeight: '700', color: Colors.primary, letterSpacing: 1, marginBottom: 8 },
-  title: { fontSize: 26, fontWeight: '700', color: Colors.text, marginBottom: 8, letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: Colors.textMuted, lineHeight: 22, marginBottom: 24 },
+  mascotCircle: {
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
   input: {
-    minHeight: 110,
+    minHeight: 104,
     backgroundColor: Colors.bgCard,
     borderRadius: 16,
     borderWidth: 1.5,
@@ -70,19 +96,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
     textAlignVertical: 'top',
-    marginBottom: 20,
+    marginBottom: 18,
   },
+  orLabel: { fontSize: 12, fontWeight: '700', color: Colors.textLight, letterSpacing: 0.6, marginBottom: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     backgroundColor: Colors.bgCard,
-    borderWidth: 1,
-    borderColor: Colors.primaryLight,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
   },
-  chipText: { fontSize: 13, color: Colors.primaryDark },
-  next: { backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 17, alignItems: 'center' },
-  nextDisabled: { backgroundColor: Colors.primaryLight },
-  nextText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  chipOn: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary },
+  chipText: { fontSize: 13, color: Colors.textMuted },
+  chipTextOn: { color: Colors.primaryDark, fontWeight: '600' },
 });

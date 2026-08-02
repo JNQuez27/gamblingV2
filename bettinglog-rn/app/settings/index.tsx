@@ -1,17 +1,44 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Switch,
+  Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Polyline, Path } from 'react-native-svg';
-import { Colors } from '../../constants/colors';
+import { Colors } from '@/constants/colors';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  reportGamblingOpen,
+  getMonitorPrefs,
+  isNativeMonitorAvailable,
+  enableBackgroundMonitoring,
+  disableBackgroundMonitoring,
+  enableWebsiteShield,
+  disableWebsiteShield,
+} from '@/services/gamblingDetection.service';
+import {
+  IconUser,
+  IconWallet,
+  IconLock,
+  IconClipboard,
+  IconGlobe,
+  IconMoon,
+  IconDownload,
+  IconHelpCircle,
+  IconStar,
+  IconBell,
+  IconLogOut,
+  IconTrash,
+} from '@/components/ui/icons';
+
+type RowIcon = React.ComponentType<{ size?: number; color?: string }>;
 
 type ToggleSetting = {
   key: string;
@@ -27,14 +54,14 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 }
 
 function SettingsRow({
-  icon,
+  Icon,
   label,
   desc,
   right,
   danger = false,
   onPress,
 }: {
-  icon: string;
+  Icon: RowIcon;
   label: string;
   desc?: string;
   right?: React.ReactNode;
@@ -44,7 +71,7 @@ function SettingsRow({
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={onPress ? 0.65 : 1} style={styles.row}>
       <View style={[styles.rowIcon, danger && styles.rowIconDanger]}>
-        <Text style={{ fontSize: 18 }}>{icon}</Text>
+        <Icon size={17} color={danger ? '#dc2626' : Colors.textMuted} />
       </View>
       <View style={styles.rowContent}>
         <Text style={[styles.rowLabel, danger && styles.rowLabelDanger]}>{label}</Text>
@@ -63,6 +90,20 @@ function SettingsRow({
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
+
+  // Actually end the session: clear the persisted token so relaunching the app
+  // returns to login. Without this, "Log Out" only navigated away while the
+  // saved session stayed on disk, so a restart signed the user right back in.
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch {
+      // Even if the network revoke fails, the local session is cleared; still
+      // send the user to the login screen.
+    }
+    router.replace('/login');
+  };
   const [toggles, setToggles] = useState<ToggleSetting[]>([
     { key: 'daily_reminder', label: 'Daily reminder', desc: 'Get a gentle nudge each day at 8:00 AM', value: true },
     { key: 'streak_alerts', label: 'Streak alerts', desc: "Remind me if I'm about to lose my streak", value: true },
@@ -72,6 +113,119 @@ export default function SettingsScreen() {
 
   const [biometric, setBiometric] = useState(false);
   const [analytics, setAnalytics] = useState(true);
+
+  // Background gambling monitoring (Mechanism 2). Reflects MonitorPrefs;
+  // the switch is disabled when the native module isn't in this build.
+  const monitorSupported = isNativeMonitorAvailable();
+  const [monitoring, setMonitoring] = useState(false);
+  const [monitorBusy, setMonitorBusy] = useState(false);
+
+  // Website shield (Mechanism 3) - local DNS VPN, separate consent.
+  const [shield, setShield] = useState(false);
+  const [shieldBusy, setShieldBusy] = useState(false);
+
+  useEffect(() => {
+    getMonitorPrefs().then((p) => {
+      setMonitoring(p.consentGranted && p.enabled);
+      setShield(p.siteConsentGranted && p.siteEnabled);
+    });
+  }, []);
+
+  const turnMonitoringOn = () => {
+    // Consent step: explain exactly what it does before asking the OS.
+    Alert.alert(
+      'Background monitoring',
+      'BettingLog will watch which app is in the foreground and send you a ' +
+        'supportive nudge when a gambling app opens. This needs the "Usage ' +
+        'Access" permission - you\'ll grant it on the next screen. A quiet ' +
+        '"Monitoring is on" notification stays visible while it runs. You can ' +
+        'turn this off any time.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: async () => {
+            setMonitorBusy(true);
+            try {
+              const on = await enableBackgroundMonitoring();
+              setMonitoring(on);
+              if (!on) {
+                Alert.alert(
+                  'Usage Access needed',
+                  'Monitoring stays off until BettingLog is allowed in Settings → Usage Access.',
+                );
+              }
+            } finally {
+              setMonitorBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const toggleMonitoring = async (next: boolean) => {
+    if (next) {
+      turnMonitoringOn();
+      return;
+    }
+    setMonitorBusy(true);
+    try {
+      await disableBackgroundMonitoring();
+      setMonitoring(false);
+    } finally {
+      setMonitorBusy(false);
+    }
+  };
+
+  const startShield = (mode: 'detect' | 'block') => {
+    setShieldBusy(true);
+    (async () => {
+      try {
+        const on = await enableWebsiteShield(mode);
+        setShield(on);
+        if (!on) {
+          Alert.alert(
+            'Shield not enabled',
+            'The website shield stays off unless you approve the VPN request. ' +
+              'If another VPN app is active, turn it off first - Android allows only one.',
+          );
+        }
+      } finally {
+        setShieldBusy(false);
+      }
+    })();
+  };
+
+  const turnShieldOn = () => {
+    // Distinct consent: explain the local VPN and let the user pick the mode.
+    Alert.alert(
+      'Website shield',
+      'This runs a private on-device VPN that inspects only which sites you look ' +
+        'up (DNS). Nothing is sent off your phone. When a gambling site is ' +
+        'detected you get a nudge; in Block mode the site is stopped from loading. ' +
+        'Android will ask you to approve the VPN on the next screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Detect only', onPress: () => startShield('detect') },
+        { text: 'Block sites', onPress: () => startShield('block') },
+      ],
+    );
+  };
+
+  const toggleShield = async (next: boolean) => {
+    if (next) {
+      turnShieldOn();
+      return;
+    }
+    setShieldBusy(true);
+    try {
+      await disableWebsiteShield();
+      setShield(false);
+    } finally {
+      setShieldBusy(false);
+    }
+  };
 
   const toggleItem = (key: string) => {
     setToggles((prev) => prev.map((t) => (t.key === key ? { ...t, value: !t.value } : t)));
@@ -99,11 +253,11 @@ export default function SettingsScreen() {
           {/* Account */}
           <SectionHeader>Account</SectionHeader>
           <View style={styles.group}>
-            <SettingsRow icon="👤" label="Edit Profile" desc="Name, avatar, bio" onPress={() => router.push('/settings/edit-profile')} />
+            <SettingsRow Icon={IconUser} label="Edit Profile" desc="Name, avatar, bio" onPress={() => router.push('/settings/edit-profile')} />
             <View style={styles.divider} />
-            <SettingsRow icon="💰" label="Spending Limit" desc="Set your monthly cap" onPress={() => router.push('/settings/spending-limit')} />
+            <SettingsRow Icon={IconWallet} label="Spending Limit" desc="Set your monthly cap" onPress={() => router.push('/settings/spending-limit')} />
             <View style={styles.divider} />
-            <SettingsRow icon="🔒" label="Privacy" desc="How your data is handled" onPress={() => router.push('/settings/privacy')} />
+            <SettingsRow Icon={IconLock} label="Privacy" desc="How your data is handled" onPress={() => router.push('/settings/privacy')} />
           </View>
 
           {/* Notifications */}
@@ -133,6 +287,42 @@ export default function SettingsScreen() {
           <View style={styles.group}>
             <View style={styles.toggleRow}>
               <View style={{ flex: 1 }}>
+                <Text style={styles.rowLabel}>Background Monitoring</Text>
+                <Text style={styles.rowDesc}>
+                  {monitorSupported
+                    ? 'Nudge me when a gambling app opens (uses Usage Access)'
+                    : 'Requires the dev build - not available here'}
+                </Text>
+              </View>
+              <Switch
+                value={monitoring}
+                disabled={!monitorSupported || monitorBusy}
+                onValueChange={toggleMonitoring}
+                trackColor={{ false: Colors.border, true: Colors.secondary }}
+                thumbColor={Colors.white}
+              />
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowLabel}>Website Shield</Text>
+                <Text style={styles.rowDesc}>
+                  {monitorSupported
+                    ? 'Detect or block gambling sites via a private on-device VPN'
+                    : 'Requires the dev build - not available here'}
+                </Text>
+              </View>
+              <Switch
+                value={shield}
+                disabled={!monitorSupported || shieldBusy}
+                onValueChange={toggleShield}
+                trackColor={{ false: Colors.border, true: Colors.secondary }}
+                thumbColor={Colors.white}
+              />
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.rowLabel}>Biometric Lock</Text>
                 <Text style={styles.rowDesc}>Require Face ID or fingerprint</Text>
               </View>
@@ -157,29 +347,45 @@ export default function SettingsScreen() {
               />
             </View>
             <View style={styles.divider} />
-            <SettingsRow icon="📋" label="Privacy Policy" onPress={() => {}} />
+            <SettingsRow Icon={IconClipboard} label="Privacy Policy" onPress={() => {}} />
           </View>
 
           {/* General */}
           <SectionHeader>General</SectionHeader>
           <View style={styles.group}>
-            <SettingsRow icon="🌐" label="Language" desc="English" onPress={() => {}} />
+            <SettingsRow Icon={IconGlobe} label="Language" desc="English" onPress={() => {}} />
             <View style={styles.divider} />
-            <SettingsRow icon="🌙" label="Appearance" desc="Light mode" onPress={() => {}} />
+            <SettingsRow Icon={IconMoon} label="Appearance" desc="Light mode" onPress={() => {}} />
             <View style={styles.divider} />
-            <SettingsRow icon="💾" label="Export Data" desc="Download your diary & logs" onPress={() => {}} />
+            <SettingsRow Icon={IconDownload} label="Export Data" desc="Download your diary & logs" onPress={() => {}} />
             <View style={styles.divider} />
-            <SettingsRow icon="❓" label="Help & Support" onPress={() => {}} />
+            <SettingsRow Icon={IconHelpCircle} label="Help & Support" onPress={() => {}} />
             <View style={styles.divider} />
-            <SettingsRow icon="⭐" label="Rate the App" onPress={() => {}} />
+            <SettingsRow Icon={IconStar} label="Rate the App" onPress={() => {}} />
           </View>
+
+          {/* Developer - only in dev builds. Verifies the detection → nudge
+              pipeline without the native module. */}
+          {__DEV__ && (
+            <>
+              <SectionHeader>Developer</SectionHeader>
+              <View style={styles.group}>
+                <SettingsRow
+                  Icon={IconBell}
+                  label="Send test nudge"
+                  desc="Simulate opening BingoPlus"
+                  onPress={() => { reportGamblingOpen('BingoPlus', 'app'); }}
+                />
+              </View>
+            </>
+          )}
 
           {/* Danger zone */}
           <SectionHeader>Account Actions</SectionHeader>
           <View style={styles.group}>
-            <SettingsRow icon="🚪" label="Log Out" danger onPress={() => router.replace('/login')} />
+            <SettingsRow Icon={IconLogOut} label="Log Out" danger onPress={handleLogout} />
             <View style={styles.divider} />
-            <SettingsRow icon="🗑️" label="Delete Account" desc="This action cannot be undone" danger onPress={() => {}} />
+            <SettingsRow Icon={IconTrash} label="Delete Account" desc="This action cannot be undone" danger onPress={() => {}} />
           </View>
 
           <Text style={styles.version}>Reflect v1.0.0 • Made with care</Text>

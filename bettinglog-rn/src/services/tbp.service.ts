@@ -1,5 +1,5 @@
-import { supabase } from './supabase';
-import type { TBPStep, TBPStatus } from '../types/psychology';
+import { supabase } from '@/services/supabase';
+import type { TBPStep, TBPStatus } from '@/types/psychology';
 
 function fromRow(row: any): TBPStep {
   return {
@@ -35,6 +35,17 @@ export async function addTBPStep(
     status: step.status,
     target_date: step.targetDate ?? null,
   });
+  if (error) throw error;
+}
+
+export async function removeTBPStep(id: string): Promise<void> {
+  const { error } = await supabase.from('tbp_steps').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// Delete every step in the signed-in user's plan (used by "Clear all").
+export async function clearTBPSteps(userId: string): Promise<void> {
+  const { error } = await supabase.from('tbp_steps').delete().eq('user_id', userId);
   if (error) throw error;
 }
 

@@ -13,7 +13,7 @@ export interface SpendingLog {
   loggedAt: string;   // ISO timestamp
 }
 
-// Derived by src/utils/spendingEngine.ts — never stored.
+// Derived by src/utils/spendingEngine.ts - never stored.
 export interface SpendingSummary {
   limit: number;
   current: number;
