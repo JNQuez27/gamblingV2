@@ -206,6 +206,7 @@ The app follows an **Input → Process → Output** model and re-measures weekly
 
 ## Further Documentation
 
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — the full system reference: theoretical foundation, database schema + RLS, service layer, engines, and per-feature specs.
 - **[STRUCTURE_PLAN.md](STRUCTURE_PLAN.md)** — plain-language walkthrough of who uses the app, what they see, and how it fits together.
 - **[SUPABASE_SETUP.md](SUPABASE_SETUP.md)** — get the backend and login working in ~10 minutes.
 - **[WORKFLOW.md](WORKFLOW.md)** — git branching and development workflow.
