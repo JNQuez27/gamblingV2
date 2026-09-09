@@ -17,6 +17,7 @@ import { Colors } from '@/constants/colors';
 import JourneyMap from '@/components/diary/JourneyMap';
 import { useAppContext } from '@/hooks/useAppContext';
 import { daysBetween } from '@/utils/date';
+import { isSlipNote } from '@/utils/diary';
 import type { DiaryEntry } from '@/types/diary';
 import {
   IconFlame,
@@ -157,7 +158,7 @@ export default function DiaryScreen() {
   // to zero after a slip; this pill remembers the personal best instead.
   const bestStreak = React.useMemo(() => {
     const cleanKeys = Object.keys(diaryEntries)
-      .filter((k) => !/slip|gambled|natalo/i.test(diaryEntries[k].map((e) => e.note).join(' ')))
+      .filter((k) => !isSlipNote(diaryEntries[k].map((e) => e.note).join(' ')))
       .sort();
     let best = 0;
     let run = 0;

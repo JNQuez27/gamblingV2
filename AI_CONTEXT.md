@@ -259,6 +259,12 @@ inactivity** — if sign-in fails for everyone at once, resume it in the dashboa
 
 ## 13. Changelog (append newest on top; update on every app change)
 
+- **2026-09-10** — Cleanup (no behavior change): removed dead imports/consts in
+  `home.tsx` (Animated, Easing, Circle, Platform/USE_NATIVE) and centralised the
+  duplicated slip-detection regex (`/slip|gambled|natalo/i`) into
+  `src/utils/diary.ts` `isSlipNote()`, used by home/diary/profile/JourneyMap.
+  tsc clean (incl. --noUnusedLocals), all 20 tests pass, no orphan files.
+
 - **2026-09-04** — Removed the "Money kept" concept entirely (the ₱350/bet-free-day
   estimate). Deleted: Journey Map day-card "Money kept (est.)" row + `saved`
   field; Profile "₱5,000 protected" milestone + `moneyKept`; Home "Money kept"

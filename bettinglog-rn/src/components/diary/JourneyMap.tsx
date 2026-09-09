@@ -27,6 +27,7 @@ import {
 import Svg, { Path, Rect } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { useAppContext } from '@/hooks/useAppContext';
+import { isSlipNote } from '@/utils/diary';
 import { IconX, IconLeaf } from '@/components/ui/icons';
 import Mascot from '@/components/ui/Mascot';
 
@@ -68,13 +69,6 @@ function shortDate(dateKey: string): string {
   return new Date(dateKey).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 }
 
-// A day counts as a slip when its note carries the honest-slip wording the
-// Home check-in writes, or the word "gambled". Manual reflections read as
-// bet-free days.
-function looksGambled(note: string): boolean {
-  return /slip|gambled|natalo/i.test(note);
-}
-
 // One dotted connector between two consecutive nodes, drawn as its own small
 // Svg. Rendering the whole trail as a single tall Svg crashes past Android's
 // max canvas/texture size (~100+ day boards), so we tile it per segment.
@@ -110,7 +104,7 @@ export default function JourneyMap() {
           dateKey,
           mood: rep.mood,
           note: rep.note,
-          gambled: looksGambled(combined),
+          gambled: isSlipNote(combined),
         };
       });
     return real;

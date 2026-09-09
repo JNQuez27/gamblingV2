@@ -25,6 +25,7 @@ import { useDialog } from '@/components/ui/DialogProvider';
 import { peso } from '@/utils/mathEngine';
 import { visitRiskLevel } from '@/utils/thresholdEngine';
 import { pgsiRisk } from '@/utils/scoring';
+import { isSlipNote } from '@/utils/diary';
 import { todayKey, daysBetween } from '@/utils/date';
 import type { TBPStatus } from '@/types/psychology';
 import {
@@ -193,7 +194,7 @@ export default function ProfileScreen() {
   // from the user's own logs - no estimate - that survives a streak reset.
   const daysLogged = Object.values(diaryEntries);
   const cleanDays = daysLogged.filter(
-    (list) => !list.some((e) => /slip|gambled|natalo/i.test(e.note)),
+    (list) => !list.some((e) => isSlipNote(e.note)),
   ).length;
   const cleanRate = daysLogged.length > 0 ? Math.round((cleanDays / daysLogged.length) * 100) : null;
 

@@ -7,11 +7,8 @@ import {
   TextInput,
   StyleSheet,
   Image,
-  Animated,
-  Easing,
   Modal,
   Pressable,
-  Platform,
   useWindowDimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
@@ -19,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Polyline, Circle } from 'react-native-svg';
+import Svg, { Path, Polyline } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { peso, limitProximity } from '@/utils/mathEngine';
 import { explainBand } from '@/utils/thresholdEngine';
@@ -28,6 +25,7 @@ import { useAppContext } from '@/hooks/useAppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { todayKey, daysBetween } from '@/utils/date';
 import type { GamblingUsageLog } from '@/types/usage';
+import { isSlipNote } from '@/utils/diary';
 import { GAMBLING_APP_PRESETS } from '@/constants/gamblingApps';
 import { getGamblingAppIcon } from '@/services/gamblingDetection.service';
 import {
@@ -85,9 +83,6 @@ const ALT_ICONS: Record<string, React.ComponentType<{ size?: number; color?: str
   '🥚': IconCircle,
   '🐖': IconUtensils,
 };
-
-// react-native-web falls back to the JS driver anyway; skip the warning.
-const USE_NATIVE = Platform.OS !== 'web';
 
 // Mood options tuned for gambling recovery - "Tempted" matters here.
 // Each mood lights up its icon in a distinct, theme-fitting colour when picked.
@@ -344,7 +339,7 @@ export default function HomeScreen() {
 
   // A day's notes mark a slip when they carry the honest-slip wording the
   // check-in writes (same heuristic the journey map uses).
-  const looksGambled = (notes: string) => /slip|gambled|natalo/i.test(notes);
+  const looksGambled = isSlipNote;
 
   // Real per-day statuses for this week, read from the diary record - so
   // yesterday keeps its check or cross even after the streak resets.
