@@ -259,6 +259,18 @@ inactivity** — if sign-in fails for everyone at once, resume it in the dashboa
 
 ## 13. Changelog (append newest on top; update on every app change)
 
+- **2026-09-10** — Offline support + auto-sync. `app-provider` now caches the
+  display snapshot per user (`src/services/offlineCache.ts`); if a refresh fetch
+  fails (offline) it hydrates from that cache so the app is fully viewable
+  offline. Core logging writes (diary, streak, spend, spend-limit, usage,
+  weekly check-in, PGSI) that hit a network error are queued in a durable
+  outbox (`src/services/outbox.ts`) and applied optimistically to local state;
+  `refresh()` flushes the outbox first, and an AppState "active" listener
+  re-runs refresh, so returning online / reopening the app auto-syncs queued
+  writes to Supabase (replayed oldest-first via `replay(op)`). Real errors
+  (e.g. RLS) still surface; online behavior is unchanged. No new dependency
+  (connectivity inferred from write success/failure + AppState).
+
 - **2026-09-10** — Cleanup (no behavior change): removed dead imports/consts in
   `home.tsx` (Animated, Easing, Circle, Platform/USE_NATIVE) and centralised the
   duplicated slip-detection regex (`/slip|gambled|natalo/i`) into
