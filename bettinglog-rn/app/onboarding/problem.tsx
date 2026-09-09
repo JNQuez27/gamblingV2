@@ -34,7 +34,7 @@ export default function ProblemScreen() {
         <OnboardingCTA
           label="Continue"
           disabled={!text.trim()}
-          onPress={() => router.push('/onboarding/gambling-apps')}
+          onPress={() => router.push('/onboarding/about-you')}
         />
       }
     >

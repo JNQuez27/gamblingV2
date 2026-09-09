@@ -16,16 +16,28 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/hooks/useAuth';
-import { signUpWithEmail } from '@/services/auth.service';
-import { supabase } from '@/services/supabase';
+import { signUpWithEmail, signInWithGoogle, friendlyAuthError } from '@/services/auth.service';
 
 type AuthMode = 'login' | 'signup';
+
+function EyeIcon({ open, color }: { open: boolean; color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={12} cy={12} r={3} stroke={color} strokeWidth={1.8} />
+      {!open && <Path d="M4 4 L20 20" stroke={color} strokeWidth={1.8} strokeLinecap="round" />}
+    </Svg>
+  );
+}
 
 export default function LoginScreen() {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -39,13 +51,22 @@ export default function LoginScreen() {
         await signIn(email.trim(), password);
         router.replace('/(tabs)/home');
       } else {
-        // New account: sign up with the chosen username, then onboarding.
-        await signUpWithEmail(email.trim(), password, name.trim());
+        if (!firstName.trim() || !lastName.trim()) {
+          setError('First and last name are required.');
+          setLoading(false);
+          return;
+        }
+        // New account: capture the name, then onboarding collects the rest.
+        await signUpWithEmail(email.trim(), password, {
+          firstName,
+          middleName,
+          lastName,
+        });
         await signIn(email.trim(), password);
         router.replace('/onboarding/problem');
       }
     } catch (e: any) {
-      setError(e?.message ?? 'Something went wrong. Please try again.');
+      setError(friendlyAuthError(e));
     } finally {
       setLoading(false);
     }
@@ -55,24 +76,18 @@ export default function LoginScreen() {
     setLoading(true);
     setError(null);
     try {
-      await supabase.auth.signInWithOAuth({ provider: 'google' });
+      const { signedIn, isNewUser } = await signInWithGoogle();
+      if (signedIn) router.replace(isNewUser ? '/onboarding/problem' : '/(tabs)/home');
     } catch (e: any) {
-      setError(e?.message ?? 'Google sign-in is not available yet.');
+      setError(friendlyAuthError(e));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFacebook = async () => {
-    setLoading(true);
+  const toggleMode = () => {
+    setMode((m) => (m === 'login' ? 'signup' : 'login'));
     setError(null);
-    try {
-      await supabase.auth.signInWithOAuth({ provider: 'facebook' });
-    } catch (e: any) {
-      setError(e?.message ?? 'Facebook sign-in is not available yet.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -96,61 +111,23 @@ export default function LoginScreen() {
 
             {/* Card */}
             <View style={styles.card}>
-              {/* Mode toggle */}
-              <View style={styles.toggle}>
-                {(['login', 'signup'] as AuthMode[]).map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    onPress={() => setMode(m)}
-                    style={[styles.toggleBtn, mode === m && styles.toggleBtnActive]}
-                    activeOpacity={0.8}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: mode === m }}
-                    accessibilityLabel={m === 'login' ? 'Log in' : 'Sign up'}
-                  >
-                    <Text style={[styles.toggleText, mode === m && styles.toggleTextActive]}>
-                      {m === 'login' ? 'Log In' : 'Sign Up'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* OAuth - Google only (v4.0) */}
-              <View style={styles.oauthGroup}>
-                <TouchableOpacity
-                  onPress={handleGoogle}
-                  disabled={loading}
-                  style={styles.oauthBtn}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continue with Google"
-                >
-                  <Svg width={20} height={20} viewBox="0 0 24 24">
-                    <Path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <Path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <Path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <Path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </Svg>
-                  <Text style={styles.oauthText}>Continue with Google</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleFacebook}
-                  disabled={loading}
-                  style={styles.oauthBtnFacebook}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continue with Facebook"
-                >
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M15.12 8.5h1.97V5.7c-.34-.05-1.5-.16-2.86-.16-2.83 0-4.77 1.73-4.77 4.9v2.2H6.4v3.1h3.06V22h3.66v-6.26h2.88l.46-3.1h-3.34v-1.9c0-.9.25-1.5 1.54-1.5z"
-                      fill="#ffffff"
-                    />
-                  </Svg>
-                  <Text style={styles.oauthFacebookText}>Continue with Facebook</Text>
-                </TouchableOpacity>
-              </View>
+              {/* OAuth - Google only */}
+              <TouchableOpacity
+                onPress={handleGoogle}
+                disabled={loading}
+                style={styles.oauthBtn}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Continue with Google"
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24">
+                  <Path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <Path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <Path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                  <Path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </Svg>
+                <Text style={styles.oauthText}>Continue with Google</Text>
+              </TouchableOpacity>
 
               {/* Divider */}
               <View style={styles.divider}>
@@ -162,18 +139,44 @@ export default function LoginScreen() {
               {/* Form */}
               <View style={styles.form}>
                 {mode === 'signup' && (
-                  <View style={styles.field}>
-                    <Text style={styles.label}>USERNAME</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={name}
-                      onChangeText={setName}
-                      placeholder="Choose a username"
-                      placeholderTextColor={Colors.textLight}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
+                  <>
+                    <View style={styles.field}>
+                      <Text style={styles.label}>FIRST NAME</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={firstName}
+                        onChangeText={setFirstName}
+                        placeholder="First name"
+                        placeholderTextColor={Colors.textLight}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                      />
+                    </View>
+                    <View style={styles.field}>
+                      <Text style={styles.label}>LAST NAME</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={lastName}
+                        onChangeText={setLastName}
+                        placeholder="Last name"
+                        placeholderTextColor={Colors.textLight}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                      />
+                    </View>
+                    <View style={styles.field}>
+                      <Text style={styles.label}>MIDDLE NAME (OPTIONAL)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={middleName}
+                        onChangeText={setMiddleName}
+                        placeholder="Middle name"
+                        placeholderTextColor={Colors.textLight}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                      />
+                    </View>
+                  </>
                 )}
 
                 <View style={styles.field}>
@@ -191,26 +194,31 @@ export default function LoginScreen() {
                 </View>
 
                 <View style={styles.field}>
-                  <View style={styles.passwordHeader}>
-                    <Text style={styles.label}>PASSWORD</Text>
-                    {mode === 'login' && (
-                      <TouchableOpacity
-                        activeOpacity={0.6}
-                        accessibilityRole="button"
-                        accessibilityLabel="Forgot password"
-                      >
-                        <Text style={styles.forgot}>Forgot?</Text>
-                      </TouchableOpacity>
-                    )}
+                  <Text style={styles.label}>PASSWORD</Text>
+                  <View style={styles.passwordWrap}>
+                    <TextInput
+                      style={[styles.input, styles.passwordInput]}
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder="••••••••"
+                      placeholderTextColor={Colors.textLight}
+                      secureTextEntry={!showPass}
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeBtn}
+                      onPress={() => setShowPass((s) => !s)}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={showPass ? 'Hide password' : 'Show password'}
+                    >
+                      <EyeIcon open={showPass} color={Colors.textMuted} />
+                    </TouchableOpacity>
                   </View>
-                  <TextInput
-                    style={styles.input}
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="••••••••"
-                    placeholderTextColor={Colors.textLight}
-                    secureTextEntry
-                  />
+                  {mode === 'login' && (
+                    <TouchableOpacity style={styles.forgotWrap} onPress={() => router.push('/forgot-password')} hitSlop={8} activeOpacity={0.6} accessibilityRole="button" accessibilityLabel="Forgot password">
+                      <Text style={styles.forgot}>Forgot password</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {error && <Text style={styles.error}>{error}</Text>}
@@ -237,11 +245,21 @@ export default function LoginScreen() {
                     )}
                   </TouchableOpacity>
                 </LinearGradient>
+
+                {/* Switch mode: underlined, brand-colored link below the button */}
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchText}>
+                    {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+                  </Text>
+                  <TouchableOpacity onPress={toggleMode} hitSlop={8} activeOpacity={0.6} accessibilityRole="button" accessibilityLabel={mode === 'login' ? 'Sign up' : 'Log in'}>
+                    <Text style={styles.switchLink}>{mode === 'login' ? 'Sign Up' : 'Log In'}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {mode === 'signup' && (
                 <Text style={styles.terms}>
-                  By continuing, you agree to our{' '}
+                  By signing up, you agree to our{' '}
                   <Text style={styles.termsLink}>Terms</Text>
                   {' '}and{' '}
                   <Text style={styles.termsLink}>Privacy Policy</Text>.
@@ -288,18 +306,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 8,
   },
-  toggle: {
-    flexDirection: 'row',
-    backgroundColor: Colors.bg,
-    borderRadius: 14,
-    padding: 4,
-    marginBottom: 24,
-  },
-  toggleBtn: { flex: 1, paddingVertical: 11, borderRadius: 10, alignItems: 'center' },
-  toggleBtnActive: { backgroundColor: Colors.white, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  toggleText: { fontSize: 14, color: Colors.textMuted },
-  toggleTextActive: { fontWeight: '600', color: Colors.text },
-  oauthGroup: { gap: 12, marginBottom: 20 },
   oauthBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -312,17 +318,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   oauthText: { fontSize: 15, fontWeight: '500', color: Colors.text },
-  oauthBtnFacebook: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#1877F2',
-  },
-  oauthFacebookText: { fontSize: 15, fontWeight: '500', color: Colors.white },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: { fontSize: 13, color: Colors.textLight },
   form: { gap: 14 },
@@ -338,11 +334,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.text,
   },
-  passwordHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  forgot: { fontSize: 12, color: Colors.primary },
+  passwordWrap: { position: 'relative', justifyContent: 'center' },
+  passwordInput: { paddingRight: 48 },
+  eyeBtn: { position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center', paddingHorizontal: 2 },
+  forgotWrap: { alignSelf: 'flex-end', marginTop: 8 },
+  forgot: { fontSize: 13, color: Colors.primary, fontWeight: '500' },
   submitBtn: { borderRadius: 14, overflow: 'hidden', marginTop: 8 },
   submitTouchable: { paddingVertical: 17, alignItems: 'center' },
   submitText: { color: Colors.white, fontSize: 16, fontWeight: '600', letterSpacing: 0.3 },
+  switchRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 18 },
+  switchText: { fontSize: 14, color: Colors.textMuted },
+  switchLink: { fontSize: 14, color: Colors.primary, fontWeight: '700', textDecorationLine: 'underline' },
   error: { color: '#c0392b', fontSize: 13, textAlign: 'center', marginTop: 4 },
   terms: { textAlign: 'center', fontSize: 12, color: Colors.textLight, marginTop: 16, lineHeight: 20 },
   termsLink: { color: Colors.primary },

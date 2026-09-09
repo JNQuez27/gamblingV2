@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Switch,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Polyline, Path } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/hooks/useAuth';
+import { useDialog } from '@/components/ui/DialogProvider';
+import { deleteAccount } from '@/services/auth.service';
 import {
   reportGamblingOpen,
   getMonitorPrefs,
@@ -36,6 +37,7 @@ import {
   IconBell,
   IconLogOut,
   IconTrash,
+  IconSmartphone,
 } from '@/components/ui/icons';
 
 type RowIcon = React.ComponentType<{ size?: number; color?: string }>;
@@ -91,6 +93,7 @@ function SettingsRow({
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
+  const dialog = useDialog();
 
   // Actually end the session: clear the persisted token so relaunching the app
   // returns to login. Without this, "Log Out" only navigated away while the
@@ -104,6 +107,33 @@ export default function SettingsScreen() {
     }
     router.replace('/login');
   };
+
+  // Two-step confirm so an account is never deleted by an accidental tap.
+  const handleDeleteAccount = () => {
+    dialog(
+      'Delete account?',
+      'This permanently deletes your account and everything in it - diary entries, streaks, plans, and check-ins. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', style: 'destructive', onPress: confirmDeleteAccount },
+      ],
+    );
+  };
+  const confirmDeleteAccount = () => {
+    dialog('Are you sure?', 'Last chance - your account will be gone for good.', [
+      { text: 'Keep my account', style: 'cancel' },
+      { text: 'Delete forever', style: 'destructive', onPress: reallyDeleteAccount },
+    ]);
+  };
+  const reallyDeleteAccount = async () => {
+    try {
+      await deleteAccount();
+      router.replace('/login');
+    } catch (e: any) {
+      dialog('Could not delete account', e?.message ?? 'Please try again.');
+    }
+  };
+
   const [toggles, setToggles] = useState<ToggleSetting[]>([
     { key: 'daily_reminder', label: 'Daily reminder', desc: 'Get a gentle nudge each day at 8:00 AM', value: true },
     { key: 'streak_alerts', label: 'Streak alerts', desc: "Remind me if I'm about to lose my streak", value: true },
@@ -133,7 +163,7 @@ export default function SettingsScreen() {
 
   const turnMonitoringOn = () => {
     // Consent step: explain exactly what it does before asking the OS.
-    Alert.alert(
+    dialog(
       'Background monitoring',
       'BettingLog will watch which app is in the foreground and send you a ' +
         'supportive nudge when a gambling app opens. This needs the "Usage ' +
@@ -150,7 +180,7 @@ export default function SettingsScreen() {
               const on = await enableBackgroundMonitoring();
               setMonitoring(on);
               if (!on) {
-                Alert.alert(
+                dialog(
                   'Usage Access needed',
                   'Monitoring stays off until BettingLog is allowed in Settings → Usage Access.',
                 );
@@ -185,7 +215,7 @@ export default function SettingsScreen() {
         const on = await enableWebsiteShield(mode);
         setShield(on);
         if (!on) {
-          Alert.alert(
+          dialog(
             'Shield not enabled',
             'The website shield stays off unless you approve the VPN request. ' +
               'If another VPN app is active, turn it off first - Android allows only one.',
@@ -199,7 +229,7 @@ export default function SettingsScreen() {
 
   const turnShieldOn = () => {
     // Distinct consent: explain the local VPN and let the user pick the mode.
-    Alert.alert(
+    dialog(
       'Website shield',
       'This runs a private on-device VPN that inspects only which sites you look ' +
         'up (DNS). Nothing is sent off your phone. When a gambling site is ' +
@@ -256,6 +286,8 @@ export default function SettingsScreen() {
             <SettingsRow Icon={IconUser} label="Edit Profile" desc="Name, avatar, bio" onPress={() => router.push('/settings/edit-profile')} />
             <View style={styles.divider} />
             <SettingsRow Icon={IconWallet} label="Spending Limit" desc="Set your monthly cap" onPress={() => router.push('/settings/spending-limit')} />
+            <View style={styles.divider} />
+            <SettingsRow Icon={IconSmartphone} label="Apps You Use" desc="Tune your Learn feed" onPress={() => router.push('/settings/gambling-apps')} />
             <View style={styles.divider} />
             <SettingsRow Icon={IconLock} label="Privacy" desc="How your data is handled" onPress={() => router.push('/settings/privacy')} />
           </View>
@@ -385,7 +417,7 @@ export default function SettingsScreen() {
           <View style={styles.group}>
             <SettingsRow Icon={IconLogOut} label="Log Out" danger onPress={handleLogout} />
             <View style={styles.divider} />
-            <SettingsRow Icon={IconTrash} label="Delete Account" desc="This action cannot be undone" danger onPress={() => {}} />
+            <SettingsRow Icon={IconTrash} label="Delete Account" desc="This action cannot be undone" danger onPress={handleDeleteAccount} />
           </View>
 
           <Text style={styles.version}>Reflect v1.0.0 • Made with care</Text>

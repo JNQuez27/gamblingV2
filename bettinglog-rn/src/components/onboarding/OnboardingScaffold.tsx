@@ -22,7 +22,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 
 const USE_NATIVE = Platform.OS !== 'web';
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 5;
 
 export default function OnboardingScaffold({
   step,

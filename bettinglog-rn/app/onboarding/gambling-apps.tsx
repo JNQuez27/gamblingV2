@@ -5,6 +5,7 @@ import Svg, { Circle, Rect, Path } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { GAMBLING_APP_PRESETS } from '@/constants/gamblingApps';
 import { detectedAppNames } from '@/services/appDetection.service';
+import { saveChosenApps, OTHERS } from '@/services/gamblingProfile';
 import { IconSmartphone } from '@/components/ui/icons';
 import OnboardingScaffold, { OnboardingCTA, PopIn } from '@/components/onboarding/OnboardingScaffold';
 
@@ -60,14 +61,17 @@ export default function GamblingAppsScreen() {
 
   return (
     <OnboardingScaffold
-      step={2}
+      step={3}
       title="Which apps do you use?"
       subtitle="Pick any that apply - what you report here is the source of truth. You can add background monitoring later, always with your consent."
       illustration={<PhoneIllustration />}
       footer={
         <OnboardingCTA
           label={selected.length ? 'Continue' : 'Skip for now'}
-          onPress={() => router.push('/onboarding/baseline')}
+          onPress={async () => {
+            await saveChosenApps(selected);
+            router.push('/onboarding/protect');
+          }}
         />
       }
     >
@@ -102,6 +106,23 @@ export default function GamblingAppsScreen() {
             </PopIn>
           );
         })}
+
+        {/* Catch-all for anything not listed. Selecting only this keeps the
+            Learn screen's materials general (no single focus). */}
+        <PopIn index={GAMBLING_APP_PRESETS.length}>
+          <TouchableOpacity
+            style={[styles.chip, selected.includes(OTHERS) && styles.chipOn]}
+            onPress={() => toggle(OTHERS)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityState={{ selected: selected.includes(OTHERS) }}
+            accessibilityLabel="Others - an app or site not listed"
+          >
+            <Text style={[styles.chipText, selected.includes(OTHERS) && styles.chipTextOn]}>
+              Others
+            </Text>
+          </TouchableOpacity>
+        </PopIn>
       </View>
 
       {selected.length > 0 && (

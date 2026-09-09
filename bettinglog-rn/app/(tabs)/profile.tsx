@@ -7,23 +7,28 @@ import {
   TextInput,
   StyleSheet,
   Linking,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Path,
+  Defs,
+  Stop,
+  LinearGradient as SvgLinearGradient,
+} from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useDialog } from '@/components/ui/DialogProvider';
 import { peso } from '@/utils/mathEngine';
 import { visitRiskLevel } from '@/utils/thresholdEngine';
+import { pgsiRisk } from '@/utils/scoring';
 import { todayKey, daysBetween } from '@/utils/date';
-import { PAGCOR_REFERENCE_BETS } from '@/constants/phPrices';
 import type { TBPStatus } from '@/types/psychology';
 import {
   IconFlame,
-  IconWallet,
   IconBookOpen,
   IconActivity,
   IconPhone,
@@ -38,13 +43,113 @@ import {
   IconTrophy,
   IconAward,
   IconTarget,
-  IconBanknote,
   IconTrendingDown,
   IconChevronRight,
   IconTrash,
 } from '@/components/ui/icons';
 
 const WEEK_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+// Light-theme palette for the analytics cards (matches the rest of the app).
+const Metric = {
+  card: Colors.bgCard,
+  cardEdge: Colors.border,
+  track: '#e9eef3',
+  text: Colors.text,
+  muted: Colors.textMuted,
+  green: Colors.secondaryDark,
+  amber: '#d99a3a',
+  blue: Colors.primary,
+  red: '#c9433f',
+};
+
+// A circular progress ring with a value in the middle. Pure SVG so it needs no
+// extra dependency. `fraction` is 0..1; `color` fills the arc.
+function RingGauge({
+  fraction,
+  color,
+  big,
+  small,
+  size = 120,
+  stroke = 12,
+}: {
+  fraction: number;
+  color: string;
+  big: string;
+  small: string;
+  size?: number;
+  stroke?: number;
+}) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const off = circ * (1 - Math.max(0, Math.min(1, fraction)));
+  const c = size / 2;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+        <Circle cx={c} cy={c} r={r} stroke={Metric.track} strokeWidth={stroke} fill="none" />
+        <Circle
+          cx={c}
+          cy={c}
+          r={r}
+          stroke={color}
+          strokeWidth={stroke}
+          fill="none"
+          strokeDasharray={circ}
+          strokeDashoffset={off}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${c} ${c})`}
+        />
+      </Svg>
+      <Text style={{ fontSize: 30, fontWeight: '800', color }}>{big}</Text>
+      <Text style={{ fontSize: 10, fontWeight: '700', color: Metric.muted, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+        {small}
+      </Text>
+    </View>
+  );
+}
+
+// A smooth weekly line chart with node dots; the peak day gets an amber dot.
+// `values` are per-day amounts; the shape scales to the week's biggest day.
+function WeekLineChart({ values, peakColor }: { values: number[]; peakColor: string }) {
+  const VBW = 300;
+  const VBH = 84;
+  const pad = 14;
+  const n = values.length;
+  const maxV = Math.max(...values, 1);
+  const x = (i: number) => pad + (i / Math.max(1, n - 1)) * (VBW - 2 * pad);
+  const y = (v: number) => VBH - pad - (v / maxV) * (VBH - 2 * pad);
+  const pts = values.map((v, i) => ({ cx: x(i), cy: y(v) }));
+  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.cx.toFixed(1)} ${p.cy.toFixed(1)}`).join(' ');
+  const peakIdx = maxV > 0 ? values.indexOf(Math.max(...values)) : -1;
+  return (
+    <Svg width="100%" height={96} viewBox={`0 0 ${VBW} ${VBH}`}>
+      <Defs>
+        <SvgLinearGradient id="wk" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0" stopColor={Metric.blue} />
+          <Stop offset="1" stopColor={Metric.green} />
+        </SvgLinearGradient>
+      </Defs>
+      <Path d={d} stroke="url(#wk)" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {pts.map((p, i) => (
+        <Circle
+          key={i}
+          cx={p.cx}
+          cy={p.cy}
+          r={i === peakIdx ? 5.5 : 4}
+          fill={i === peakIdx ? peakColor : Metric.blue}
+        />
+      ))}
+    </Svg>
+  );
+}
+
+// Maps a PGSI risk band to a ring/accent color.
+function riskColor(level?: string): string {
+  if (level === 'severe') return Metric.red;
+  if (level === 'moderate') return Metric.amber;
+  return Metric.green;
+}
 
 const EMERGENCY = [
   { Icon: IconPhone, title: 'Emergency Hotline', sub: 'National · 911', tel: '911', tint: '#fdecec', accent: '#c9433f' },
@@ -56,6 +161,7 @@ const EMERGENCY = [
 export default function ProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const dialog = useDialog();
   const {
     streak,
     diaryEntries,
@@ -80,12 +186,21 @@ export default function ProfileScreen() {
 
   const displayName = user?.displayName || (user?.email ? user.email.split('@')[0] : 'You');
   const diaryCount = Object.values(diaryEntries).reduce((sum, list) => sum + list.length, 0);
-  const moneyKept = streak * PAGCOR_REFERENCE_BETS.averageSessionSpend;
+
+  // Clean rate: of the days you actually checked in, the share that were
+  // bet-free (a day counts as a slip if its notes carry the honest-slip wording
+  // the check-in writes - same heuristic the home week strip uses). A real ratio
+  // from the user's own logs - no estimate - that survives a streak reset.
+  const daysLogged = Object.values(diaryEntries);
+  const cleanDays = daysLogged.filter(
+    (list) => !list.some((e) => /slip|gambled|natalo/i.test(e.note)),
+  ).length;
+  const cleanRate = daysLogged.length > 0 ? Math.round((cleanDays / daysLogged.length) * 100) : null;
 
   // Personal counters - computed from live state.
   const statCards = [
     { Icon: IconFlame, label: 'Bet-free streak', value: `${streak} day${streak === 1 ? '' : 's'}`, accent: '#d99a3a' },
-    { Icon: IconWallet, label: 'Money kept', value: peso(moneyKept), accent: Colors.secondaryDark },
+    { Icon: IconCheck, label: 'Clean rate', value: cleanRate === null ? '–' : `${cleanRate}%`, accent: Colors.secondaryDark },
     { Icon: IconBookOpen, label: 'Diary entries', value: String(diaryCount), accent: Colors.primaryDark },
     { Icon: IconActivity, label: 'Latest PGSI', value: latestAssessment ? String(latestAssessment.totalScore) : '-', accent: '#9b6bd1' },
   ];
@@ -96,6 +211,7 @@ export default function ProfileScreen() {
         level: latestAssessment.category,
         score: latestAssessment.totalScore,
         position: Math.min(1, latestAssessment.totalScore / 27),
+        band: pgsiRisk(latestAssessment.totalScore).riskLevel, // 'low' | 'moderate' | 'severe'
       }
     : null;
 
@@ -106,9 +222,12 @@ export default function ProfileScreen() {
   const spendPct = spending.limit > 0
     ? Math.min(100, Math.round((spending.spent / spending.limit) * 100))
     : 0;
+  // Limit gauge stays green well under budget, warns amber, turns red at/over.
+  const limitColor = spendPct >= 100 ? Metric.red : spendPct >= 80 ? Metric.amber : Metric.green;
 
-  // Bar heights scale against the week's biggest spend day (0 = bet-free).
-  const maxWeekSpend = Math.max(...weeklySpendBars, 1);
+  // Weekly totals from the same per-day spend data that drove the bars.
+  const spentWeek = weeklySpendBars.reduce((sum, v) => sum + v, 0);
+  const betFreeDays = weeklySpendBars.filter((v) => v === 0).length;
 
   // Gambling activity over the last 30 days, from real usage logs.
   const today = todayKey();
@@ -132,7 +251,6 @@ export default function ProfileScreen() {
   const milestones = [
     { Icon: IconAward, title: 'One week of control', sub: '7 consecutive bet-free days', current: streak, target: 7 },
     { Icon: IconTrophy, title: 'Two-week streak', sub: '14 consecutive bet-free days', current: streak, target: 14 },
-    { Icon: IconBanknote, title: `${peso(5000)} protected`, sub: 'Money kept instead of gambled', current: moneyKept, target: 5000 },
     { Icon: IconBookOpen, title: 'Consistent journaling', sub: 'Write 10 diary entries', current: diaryCount, target: 10 },
     { Icon: IconTarget, title: 'Know your score', sub: 'Complete a PGSI self-assessment', current: latestAssessment ? 1 : 0, target: 1 },
   ];
@@ -159,7 +277,7 @@ export default function ProfileScreen() {
 
   const confirmClearPlan = () => {
     setPlanMenuOpen(false);
-    Alert.alert(
+    dialog(
       'Clear your plan?',
       'This removes all steps at once. You can rebuild or use the suggested plan again anytime.',
       [
@@ -289,96 +407,90 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          {/* Risk / spending / weekly pattern */}
-          <View style={styles.card}>
-            <View style={styles.metricHead}>
-              <View style={styles.metricHeadLeft}>
-                <Text style={styles.metricLabel}>Gambling risk</Text>
-                <Text style={styles.metricCaption}>From your latest self-assessment (PGSI)</Text>
-              </View>
-              <View style={styles.riskChip}>
-                <Text style={styles.riskChipText} numberOfLines={1}>
-                  {risk ? `${risk.level} · ${risk.score}` : 'Not assessed yet'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.gaugeTrack}>
-              <View style={[styles.gaugeSeg, { backgroundColor: '#bfe0cd' }]} />
-              <View style={[styles.gaugeSeg, { backgroundColor: '#f2dca8' }]} />
-              <View style={[styles.gaugeSeg, { backgroundColor: '#f2c2c0' }]} />
-              {risk && <View style={[styles.gaugeMarker, { left: `${risk.position * 100}%` }]} />}
-            </View>
-            <View style={styles.gaugeLabels}>
-              <Text style={styles.gaugeLabel}>Low</Text>
-              <Text style={styles.gaugeLabel}>Moderate</Text>
-              <Text style={styles.gaugeLabel}>High</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.retakeBtn}
-              onPress={() => router.push('/assessment')}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Retake the PGSI self-assessment"
-            >
-              <Text style={styles.retakeText}>
-                {latestAssessment ? 'Retake assessment' : 'Take the assessment'}
-              </Text>
-              <IconChevronRight size={15} color={Colors.primary} strokeWidth={2.5} />
-            </TouchableOpacity>
-
-            <View style={styles.cardDivider} />
-
-            <View style={styles.metricHead}>
-              <View style={styles.metricHeadLeft}>
-                <Text style={styles.metricLabel}>Monthly spending</Text>
-                <Text style={styles.metricCaption}>Against the limit you set</Text>
-              </View>
-              <Text style={styles.metricValue} numberOfLines={1}>
-                {spending.limit > 0
-                  ? `${peso(spending.spent)} / ${peso(spending.limit)}`
-                  : `${peso(spending.spent)} · no limit set`}
-              </Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryDark]}
-                style={[styles.progressFill, { width: `${spendPct}%` }]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+          {/* Gambling risk - ring colored by PGSI band */}
+          <View style={styles.darkCard}>
+            <View style={styles.darkRow}>
+              <RingGauge
+                fraction={risk ? risk.position : 0}
+                color={risk ? riskColor(risk.band) : Metric.muted}
+                big={risk ? String(risk.score) : '–'}
+                small="score"
               />
+              <View style={styles.darkInfo}>
+                <Text style={styles.darkLabel}>Gambling risk</Text>
+                <Text style={[styles.darkLevel, { color: risk ? riskColor(risk.band) : Metric.muted }]}>
+                  {risk ? risk.level : 'Not assessed yet'}
+                </Text>
+                <Text style={styles.darkCaption}>From your latest PGSI self-assessment (0–27).</Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/assessment')}
+                  activeOpacity={0.8}
+                  style={styles.darkLink}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retake the PGSI self-assessment"
+                >
+                  <Text style={styles.darkLinkText}>{latestAssessment ? 'Retake assessment' : 'Take the assessment'}</Text>
+                  <IconChevronRight size={14} color={Metric.blue} strokeWidth={2.5} />
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={styles.progressHint}>
-              {spending.limit > 0
-                ? `${peso(Math.max(0, spending.limit - spending.spent))} left · ${spendPct}% used`
-                : 'Set a limit in Settings → Spending limit'}
-            </Text>
+          </View>
 
-            <View style={styles.cardDivider} />
-
-            <Text style={styles.metricLabel}>This week's spending</Text>
-            <View style={styles.barsRow}>
-              {weeklySpendBars.map((h, i) => (
-                <View key={i} style={styles.barCol}>
-                  <View style={styles.barTrack}>
-                    {h === 0 ? (
-                      <View style={[styles.bar, styles.barClean]} />
-                    ) : (
-                      <LinearGradient
-                        colors={['#e8b6b6', '#d98383']}
-                        style={[styles.bar, { height: Math.max(6, (h / maxWeekSpend) * 44) }]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                      />
-                    )}
-                  </View>
-                  <Text style={styles.barLabel}>{WEEK_LABELS[i]}</Text>
+          {/* Monthly spending limit - budget ring */}
+          <TouchableOpacity
+            style={styles.darkCard}
+            activeOpacity={0.85}
+            onPress={() => router.push('/settings/spending-limit')}
+            accessibilityRole="button"
+            accessibilityLabel="Adjust your monthly spending limit"
+          >
+            <View style={styles.darkRow}>
+              <RingGauge
+                fraction={spending.limit > 0 ? spendPct / 100 : 0}
+                color={spending.limit > 0 ? limitColor : Metric.muted}
+                big={spending.limit > 0 ? `${spendPct}%` : '–'}
+                small={spending.limit > 0 ? 'used' : 'no limit'}
+              />
+              <View style={styles.darkInfo}>
+                <Text style={styles.darkLabel}>Monthly spending limit</Text>
+                {spending.limit > 0 ? (
+                  <>
+                    <Text style={styles.darkLevel}>
+                      {peso(spending.spent)} <Text style={styles.darkOf}>of {peso(spending.limit)}</Text>
+                    </Text>
+                    <Text style={styles.darkCaption}>{peso(Math.max(0, spending.limit - spending.spent))} left this month.</Text>
+                  </>
+                ) : (
+                  <Text style={styles.darkCaption}>Set a monthly limit and we'll warn you before you reach it.</Text>
+                )}
+                <View style={styles.darkLink}>
+                  <Text style={styles.darkLinkText}>{spending.limit > 0 ? 'Adjust limit' : 'Set a limit'}</Text>
+                  <IconChevronRight size={14} color={Metric.blue} strokeWidth={2.5} />
                 </View>
-              ))}
+              </View>
             </View>
-            <View style={styles.legendRow}>
-              <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: Colors.secondary }]} /><Text style={styles.legendText}>Bet-free</Text></View>
-              <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#d98383' }]} /><Text style={styles.legendText}>Spent</Text></View>
+          </TouchableOpacity>
+
+          {/* This week's spending - line chart + stat footers */}
+          <View style={styles.darkCard}>
+            <Text style={styles.darkLabel}>This week's spending</Text>
+            <View style={styles.chartWrap}>
+              <WeekLineChart values={weeklySpendBars} peakColor={Metric.amber} />
+              <View style={styles.chartLabels}>
+                {WEEK_LABELS.map((l, i) => (
+                  <Text key={i} style={styles.chartLabel}>{l}</Text>
+                ))}
+              </View>
+            </View>
+            <View style={styles.darkStatsRow}>
+              <View style={styles.darkStat}>
+                <Text style={[styles.darkStatValue, { color: Metric.green }]}>{betFreeDays}</Text>
+                <Text style={styles.darkStatLabel}>Bet-free days</Text>
+              </View>
+              <View style={[styles.darkStat, { alignItems: 'flex-end' }]}>
+                <Text style={[styles.darkStatValue, { color: Metric.amber }]}>{peso(spentWeek)}</Text>
+                <Text style={styles.darkStatLabel}>Spent this week</Text>
+              </View>
             </View>
           </View>
 
@@ -691,7 +803,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  cardDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 18 },
   rowBorder: { borderTopWidth: 1, borderTopColor: Colors.border },
 
   // Compact progress grid (2×2 inside one card)
@@ -724,34 +835,34 @@ const styles = StyleSheet.create({
   influenceEmptyTitle: { fontSize: 14.5, fontWeight: '700', color: Colors.text },
   influenceEmptyText: { fontSize: 12, color: Colors.textMuted, lineHeight: 17, marginTop: 3 },
 
-  // Analytics blocks
-  metricHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 10 },
-  metricHeadLeft: { flex: 1 },
-  metricLabel: { fontSize: 13, fontWeight: '700', color: Colors.text },
-  metricCaption: { fontSize: 11, color: Colors.textLight, marginTop: 1 },
-  metricValue: { fontSize: 12.5, fontWeight: '600', color: Colors.textMuted, flexShrink: 0 },
-  riskChip: { backgroundColor: '#fdf3e0', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, flexShrink: 0, maxWidth: '58%' },
-  riskChipText: { fontSize: 11.5, fontWeight: '700', color: '#c78a2a' },
-  gaugeTrack: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', position: 'relative', gap: 2 },
-  gaugeSeg: { flex: 1, borderRadius: 3 },
-  gaugeMarker: { position: 'absolute', top: -3, width: 4, height: 16, borderRadius: 2, backgroundColor: Colors.text, marginLeft: -2 },
-  gaugeLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  gaugeLabel: { fontSize: 10, color: Colors.textLight, fontWeight: '600' },
-  retakeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, marginTop: 14 },
-  retakeText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
-  progressTrack: { height: 10, borderRadius: 5, backgroundColor: Colors.bg, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 5 },
-  progressHint: { fontSize: 11.5, color: Colors.textMuted, marginTop: 6, fontWeight: '500' },
-  barsRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end', height: 56, marginTop: 12 },
-  barCol: { flex: 1, alignItems: 'center', gap: 6 },
-  barTrack: { flex: 1, justifyContent: 'flex-end', width: '100%' },
-  bar: { width: '100%', borderRadius: 6 },
-  barClean: { height: 6, backgroundColor: Colors.secondaryLight },
-  barLabel: { fontSize: 10, color: Colors.textLight },
-  legendRow: { flexDirection: 'row', gap: 16, marginTop: 12, justifyContent: 'center' },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 11, color: Colors.textMuted, fontWeight: '600' },
+  // Analytics "spotlight" cards (light theme)
+  darkCard: {
+    backgroundColor: Metric.card,
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Metric.cardEdge,
+    shadowColor: '#22303e',
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  darkRow: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  darkInfo: { flex: 1 },
+  darkLabel: { fontSize: 13, fontWeight: '700', color: Metric.text },
+  darkLevel: { fontSize: 17, fontWeight: '800', color: Metric.text, marginTop: 3 },
+  darkOf: { fontSize: 13, fontWeight: '600', color: Metric.muted },
+  darkCaption: { fontSize: 11.5, color: Metric.muted, lineHeight: 16, marginTop: 3 },
+  darkLink: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 10 },
+  darkLinkText: { fontSize: 13, fontWeight: '700', color: Metric.blue },
+  chartWrap: { marginTop: 14 },
+  chartLabels: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10, marginTop: 2 },
+  chartLabel: { fontSize: 10, fontWeight: '600', color: Metric.muted },
+  darkStatsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: Metric.cardEdge },
+  darkStat: { gap: 3 },
+  darkStatValue: { fontSize: 22, fontWeight: '800' },
+  darkStatLabel: { fontSize: 11.5, color: Metric.muted, fontWeight: '600' },
 
   // My Plan
   planEmpty: { alignItems: 'center', gap: 12, paddingVertical: 6, paddingBottom: 16 },

@@ -14,7 +14,9 @@
       "adaptiveIcon": {
         "backgroundColor": "#e8f4fd"
       },
-      "permissions": ["POST_NOTIFICATIONS"]
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -24,7 +26,9 @@
       "expo-router",
       "expo-system-ui",
       "expo-secure-store",
-      "./plugins/withGamblingAppQueries"
+      "./plugins/withGamblingAppQueries",
+      "expo-asset",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

@@ -43,9 +43,3 @@ export function frequencyMath(thisWeek: number, lastWeek: number): string {
   const direction = change >= 0 ? `up ${change}%` : `down ${Math.abs(change)}%`;
   return `You opened gambling apps ${thisWeek}× this week, ${direction} from last week.`;
 }
-
-// Law of Effect - surface the satisfying outcome of restraint.
-// "3 days without gambling = ₱1,200 kept."
-export function savingsReinforcement(cleanDays: number, dailyAverageSpend: number): string {
-  return `${cleanDays} day(s) without gambling = ${peso(cleanDays * dailyAverageSpend)} kept.`;
-}

@@ -25,7 +25,8 @@ export default function AssessmentScreen() {
   const setAnswer = (itemIndex: number, value: number) =>
     setAnswers((prev) => prev.map((a, i) => (i === itemIndex ? value : a)));
 
-  const allAnswered = answers.every((a) => a >= 0);
+  const answeredCount = answers.filter((a) => a >= 0).length;
+  const allAnswered = answeredCount === PGSI_ITEMS.length;
 
   const submit = async () => {
     if (!allAnswered || saving) return;
@@ -88,6 +89,22 @@ export default function AssessmentScreen() {
           Answer honestly - the point is to see your own trend, not to score well.
         </Text>
 
+        {/* Live progress bar */}
+        <View style={styles.progressWrap}>
+          <Text style={[styles.progressLabel, allAnswered && styles.progressLabelDone]}>
+            {allAnswered ? 'All questions answered' : `${answeredCount} of ${PGSI_ITEMS.length} answered`}
+          </Text>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                allAnswered && styles.progressFillDone,
+                { width: `${(answeredCount / PGSI_ITEMS.length) * 100}%` },
+              ]}
+            />
+          </View>
+        </View>
+
         {PGSI_ITEMS.map((item, i) => (
           <View key={item.id} style={styles.card}>
             <Text style={styles.qNum}>QUESTION {i + 1} OF {PGSI_ITEMS.length}</Text>
@@ -131,6 +148,12 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   scroll: { padding: 24, paddingBottom: 32 },
   subtitle: { fontSize: 15, color: Colors.textMuted, lineHeight: 22, marginBottom: 20 },
+  progressWrap: { marginBottom: 18 },
+  progressLabel: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark, marginBottom: 6 },
+  progressLabelDone: { color: Colors.secondaryDark },
+  progressTrack: { height: 8, borderRadius: 999, backgroundColor: 'rgba(91,155,213,0.12)', overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 999, backgroundColor: Colors.primary },
+  progressFillDone: { backgroundColor: Colors.secondaryDark },
   card: { backgroundColor: Colors.bgCard, borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: Colors.border },
   qNum: { fontSize: 10, fontWeight: '700', color: Colors.primary, letterSpacing: 1, marginBottom: 6 },
   question: { fontSize: 15, fontWeight: '600', color: Colors.text, marginBottom: 12, lineHeight: 21 },

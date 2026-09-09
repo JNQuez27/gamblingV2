@@ -23,6 +23,18 @@ export function daysBetween(aKey: string, bKey: string): number {
   return Math.round((b - a) / (1000 * 60 * 60 * 24));
 }
 
+// Whole years from a "YYYY-MM-DD" birthdate to today, or null if unparseable.
+export function ageFromBirthdate(key: string): number | null {
+  if (!key) return null;
+  const b = new Date(key);
+  if (Number.isNaN(b.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age;
+}
+
 // "July 9, 2026"
 export function prettyDate(key: string): string {
   return new Date(key).toLocaleDateString('en-PH', {

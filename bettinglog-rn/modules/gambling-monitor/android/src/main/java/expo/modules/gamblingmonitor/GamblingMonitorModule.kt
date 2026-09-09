@@ -5,10 +5,16 @@ import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.net.VpnService
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -79,6 +85,23 @@ class GamblingMonitorModule : Module() {
     Function("stopMonitoring") {
       val context = appContext.reactContext
       context?.stopService(Intent(context, GamblingMonitorService::class.java))
+    }
+
+    // Returns the installed app's launcher icon as a PNG data-URI, or null if
+    // the package isn't installed/visible. All on-device (no network); the
+    // package must be declared in the manifest <queries> to be visible on
+    // Android 11+ (see plugins/withGamblingAppQueries).
+    Function("getAppIcon") { pkg: String ->
+      val context = appContext.reactContext ?: return@Function null
+      try {
+        val drawable = context.packageManager.getApplicationIcon(pkg)
+        val bmp = drawableToBitmap(drawable)
+        val out = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+        "data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+      } catch (e: Exception) {
+        null // not installed, not visible, or icon unavailable
+      }
     }
 
     // ── Website shield (Mechanism 3 — local DNS VPN) ────────────────
@@ -194,6 +217,17 @@ class GamblingMonitorModule : Module() {
         promise.resolve(context != null && hasUsageAccess(context))
       }
     }
+  }
+
+  // Rasterise any Drawable (incl. AdaptiveIconDrawable) to a square bitmap.
+  private fun drawableToBitmap(drawable: Drawable): Bitmap {
+    if (drawable is BitmapDrawable && drawable.bitmap != null) return drawable.bitmap
+    val size = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bmp
   }
 
   private fun hasUsageAccess(context: Context): Boolean {

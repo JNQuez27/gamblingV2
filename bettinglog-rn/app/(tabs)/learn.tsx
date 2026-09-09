@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { MENTAL_HEALTH_TERMS } from '@/constants/mentalHealthTerms';
+import type { GamblingCategory } from '@/constants/gamblingApps';
+import { getChosenApps, categoriesFor } from '@/services/gamblingProfile';
 import {
   IconBulb,
   IconTarget,
@@ -37,8 +39,19 @@ const CATEGORY_META: Record<string, { Icon: ResourceIcon; accent: string; tint: 
 };
 
 // Real-world learning resources - reputable, free organizations. Tapping a
-// card opens the actual site in the browser (no API key needed).
-const RESOURCES = [
+// card opens the actual site in the browser (no API key needed). `topics` tags
+// a card to a gambling type so the Learn screen can float the ones that match
+// what the user reported using; untagged cards are universal.
+type Resource = {
+  source: string;
+  title: string;
+  desc: string;
+  category: 'Understand' | 'Tools' | 'Support';
+  url: string;
+  topics?: GamblingCategory[];
+};
+
+const RESOURCES: Resource[] = [
   {
     source: 'HelpGuide.org',
     title: 'How gambling hooks the brain - and how to break the cycle',
@@ -116,7 +129,83 @@ const RESOURCES = [
     category: 'Support',
     url: 'https://www.gam-anon.org/',
   },
+
+  // Type-specific cards - surfaced first for users who reported that kind of app.
+  {
+    source: 'NCPG',
+    title: 'Sports betting: the fast-bet trap',
+    desc: 'Why in-play and app betting speed up losses, and how to slow the cycle down.',
+    category: 'Understand',
+    url: 'https://www.ncpgambling.org/',
+    topics: ['sports'],
+  },
+  {
+    source: 'HelpGuide.org',
+    title: 'Casino & slots apps: built to keep you playing',
+    desc: 'The design tricks behind slots and online casino games - and how to resist them.',
+    category: 'Understand',
+    url: 'https://www.helpguide.org/mental-health/addiction/gambling-addiction-and-problem-gambling',
+    topics: ['casino'],
+  },
+  {
+    source: 'GamCare',
+    title: 'Fast, repeated betting: getting back in control',
+    desc: 'Practical steps for high-frequency betting like e-sabong and quick rounds.',
+    category: 'Tools',
+    url: 'https://www.gamcare.org.uk/self-help/self-help-resources/',
+    topics: ['e-sabong'],
+  },
+  {
+    source: 'GambleAware',
+    title: 'Lottery & scratchcards: the "harmless" habit that adds up',
+    desc: 'Why frequent lotto play still matters, and how to set limits that hold.',
+    category: 'Understand',
+    url: 'https://www.gambleaware.org/',
+    topics: ['lottery'],
+  },
+  {
+    source: 'SMART Recovery',
+    title: 'Poker & skill games: the "I can win it back" urge',
+    desc: 'CBT tools for games where skill masks the real financial risk.',
+    category: 'Tools',
+    url: 'https://smartrecovery.org/gambling-addiction',
+    topics: ['poker'],
+  },
 ];
+
+// Friendly labels + a couple of type-specific insights per gambling category,
+// used to focus the "Today's focus" card and the resource ordering.
+const CATEGORY_LABEL: Record<GamblingCategory, string> = {
+  casino: 'casino & slots',
+  sports: 'sports betting',
+  'e-sabong': 'e-sabong',
+  lottery: 'lottery',
+  poker: 'poker',
+  other: 'gambling',
+};
+
+const CATEGORY_TIPS: Partial<Record<GamblingCategory, string[]>> = {
+  sports: [
+    'Live "in-play" odds are engineered to keep you betting every minute - the faster the bet, the faster the loss.',
+    'A "sure thing" parlay is the house edge stacked several times over. The more legs, the worse your odds.',
+  ],
+  casino: [
+    'Slots and casino apps never "warm up" - every spin is independent. A cold streak is not "due" to end.',
+    'Near-misses are designed to feel like almost-wins. They are losses dressed up to keep you spinning.',
+  ],
+  'e-sabong': [
+    'Quick, back-to-back rounds give urges no time to fade. Building in a pause between rounds is a real tool.',
+    'High-frequency betting hides how fast money adds up - log each round for one day and read it back.',
+  ],
+  lottery: [
+    'Daily draws and scratchcards feel small, but frequency is the cost. Add up a month of tickets.',
+    'The jackpot odds do not change with a "lucky" number or shop. Every ticket is the same long shot.',
+  ],
+  poker: [
+    'Skill narrows the house edge but never removes variance - a good player can still lose for a long time.',
+    'Chasing to "win it back" turns a bad night into a worse one. Set a stop-loss before you sit down.',
+  ],
+};
 
 // A pool of short, evidence-based insights. One is surfaced as "Today's focus",
 // rotating by the calendar day so the screen shows something fresh daily.
@@ -134,7 +223,7 @@ const DAILY_TIPS = [
   'HALT: Hungry, Angry, Lonely, Tired. These states weaken control - address them first.',
   'Self-exclusion is a strength, not a defeat. Blocking access is a decision your future self will thank you for.',
   'Progress is not a straight line. A slip you log honestly is data, not failure.',
-  'Celebrate the money kept, not just the days counted. Give it a purpose you can see.',
+  'Celebrate the bet-free days and how you feel, not just the numbers. Notice what is getting easier.',
 ];
 
 // Guided practices with real steps - tap to expand and follow along.
@@ -188,26 +277,54 @@ export default function LearnScreen() {
 
   const q = query.trim().toLowerCase();
 
+  // The gambling types the user reported using. 'other'/"Others" carries no
+  // focus, so it falls through to the default (random) rotation.
+  const [focusCats, setFocusCats] = useState<GamblingCategory[]>([]);
+  useEffect(() => {
+    getChosenApps()
+      .then((apps) => setFocusCats(categoriesFor(apps).filter((c) => c !== 'other')))
+      .catch(() => {});
+  }, []);
+  const focused = focusCats.length > 0;
+  const focusLabel = focusCats.map((c) => CATEGORY_LABEL[c]).join(', ');
+
   // Day-of-epoch: changes at midnight, drives the daily rotation below.
   const dayIndex = Math.floor(Date.now() / 86_400_000);
-  const todayTip = DAILY_TIPS[dayIndex % DAILY_TIPS.length];
 
-  // Rotate the resource order by the day so a different set surfaces first
-  // each day - the library never feels static or "used up".
-  const rotatedResources = useMemo(() => {
-    const shift = dayIndex % RESOURCES.length;
-    return [...RESOURCES.slice(shift), ...RESOURCES.slice(0, shift)];
-  }, [dayIndex]);
+  // Today's focus: a type-specific insight when the user has a focus, else the
+  // general rotating tip.
+  const todayTip = useMemo(() => {
+    if (focused) {
+      const pool = CATEGORY_TIPS[focusCats[dayIndex % focusCats.length]];
+      if (pool && pool.length) return pool[dayIndex % pool.length];
+    }
+    return DAILY_TIPS[dayIndex % DAILY_TIPS.length];
+  }, [focused, focusCats, dayIndex]);
+
+  // Focused: float resources matching the user's types first, then universal
+  // cards, then the rest. Unfocused: rotate by the day so nothing feels stale.
+  const orderedResources = useMemo(() => {
+    if (!focused) {
+      const shift = dayIndex % RESOURCES.length;
+      return [...RESOURCES.slice(shift), ...RESOURCES.slice(0, shift)];
+    }
+    const rank = (r: Resource) => {
+      if (r.topics?.some((t) => focusCats.includes(t))) return 0; // matches user's type
+      if (!r.topics) return 1; // universal
+      return 2; // tagged for a different type
+    };
+    return [...RESOURCES].sort((a, b) => rank(a) - rank(b));
+  }, [focused, focusCats, dayIndex]);
 
   // Search + category filtering both actually apply to the resource list.
   const filteredResources = useMemo(() => {
     const cat = CATEGORIES[activeCategory];
-    return rotatedResources.filter((r) => {
+    return orderedResources.filter((r) => {
       if (cat !== 'All' && r.category !== cat) return false;
       if (!q) return true;
       return `${r.source} ${r.title} ${r.desc}`.toLowerCase().includes(q);
     });
-  }, [rotatedResources, activeCategory, q]);
+  }, [orderedResources, activeCategory, q]);
 
   // The search box also narrows the glossary.
   const filteredTerms = useMemo(
@@ -330,7 +447,9 @@ export default function LearnScreen() {
           <View>
             <Text style={styles.sectionTitle}>Learn From the Real World</Text>
             <Text style={styles.sectionCaption}>
-              Trusted, free organizations - each card opens the real site
+              {focused
+                ? `Focused on your ${focusLabel} use - trusted, free organizations`
+                : 'Trusted, free organizations - each card opens the real site'}
             </Text>
           </View>
           {filteredResources.length === 0 ? (

@@ -58,17 +58,68 @@ const moodMeta = (label: string) => MOOD_META[label] ?? MOOD_FALLBACK;
 // react-native-web falls back to the JS driver anyway; skip the warning.
 const USE_NATIVE = Platform.OS !== 'web';
 
-// "2026-07-12" + ISO timestamp → "Today, 9:41 AM" / "Yesterday, 7:15 PM" /
-// "Mon, Jul 7".
-function formatEntryDate(entry: DiaryEntry): string {
+// Serif body gives the notes a warm, handwritten-journal feel (Soft UI /
+// wellness direction). RN maps 'serif' to Noto Serif on Android; Georgia on iOS.
+const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+
+// Just the clock time, e.g. "9:41 AM" - the day is shown as a group header now.
+function timeOf(entry: DiaryEntry): string {
+  return new Date(entry.createdAt || entry.date).toLocaleTimeString('en-PH', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+// "Today" / "Yesterday" / "Wednesday, July 9" - the date-group header label.
+function dayLabelOf(entry: DiaryEntry): string {
   const d = new Date(entry.createdAt || entry.date);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  const time = d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true });
-  if (d.toDateString() === today.toDateString()) return `Today, ${time}`;
-  if (d.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
-  return d.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' });
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+// One diary note, styled as a warm paper card with a mood avatar and serif body.
+// Eases in with a small staggered rise so the feed feels alive, not static.
+function EntryItem({ entry, index }: { entry: DiaryEntry; index: number }) {
+  const meta = moodMeta(entry.mood);
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(Math.min(index, 8) * 55),
+      Animated.spring(v, { toValue: 1, friction: 8, tension: 80, useNativeDriver: USE_NATIVE }),
+    ]).start();
+  }, []);
+  return (
+    <Animated.View
+      style={{
+        opacity: v,
+        transform: [
+          { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+          { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
+        ],
+      }}
+    >
+      <View style={styles.paperCard}>
+        <View style={[styles.moodAvatar, { backgroundColor: meta.tint + '33' }]}>
+          <meta.Icon size={22} color={meta.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={styles.paperTop}>
+            <View style={styles.moodLabelRow}>
+              <View style={[styles.moodDot, { backgroundColor: meta.accent }]} />
+              <Text style={[styles.moodName, { color: meta.accent }]}>{entry.mood}</Text>
+            </View>
+            <Text style={styles.paperTime}>{timeOf(entry)}</Text>
+          </View>
+          <Text style={styles.paperNote}>{entry.note}</Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
 }
 
 export default function DiaryScreen() {
@@ -88,6 +139,19 @@ export default function DiaryScreen() {
         .sort((a, b) => (b.createdAt || b.date).localeCompare(a.createdAt || a.date)),
     [diaryEntries],
   );
+
+  // Group the newest-first entries under day headers ("Today" / date), keeping
+  // order so the feed reads as a running journal.
+  const groupedEntries = React.useMemo(() => {
+    const groups: { label: string; items: DiaryEntry[] }[] = [];
+    for (const entry of entries) {
+      const label = dayLabelOf(entry);
+      const last = groups[groups.length - 1];
+      if (last && last.label === label) last.items.push(entry);
+      else groups.push({ label, items: [entry] });
+    }
+    return groups;
+  }, [entries]);
 
   // Highest bet-free run on record. The Home streak counts daily and resets
   // to zero after a slip; this pill remembers the personal best instead.
@@ -308,35 +372,30 @@ export default function DiaryScreen() {
 
           {entries.length === 0 ? (
             <View style={styles.emptyCard}>
-              <IconSprout size={30} color={Colors.secondaryDark} />
-              <Text style={styles.emptyTitle}>No entries yet</Text>
+              <View style={styles.emptyIcon}>
+                <IconSprout size={32} color={Colors.secondaryDark} />
+              </View>
+              <Text style={styles.emptyTitle}>Your story starts here</Text>
               <Text style={styles.emptyText}>
-                Tap the + button to write your first reflection. Notes you add on the
-                Home check-in show up here too.
+                Tap the pencil to write your first reflection. Notes you add on the
+                Home check-in land here too.
               </Text>
             </View>
           ) : (
-            entries.map((entry) => {
-              const meta = moodMeta(entry.mood);
-              return (
-                <View
-                  key={entry.id}
-                  style={[styles.entryCard, { borderLeftWidth: 4, borderLeftColor: meta.tint }]}
-                >
-                  <View style={styles.entryTop}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.entryDate}>{formatEntryDate(entry)}</Text>
-                      <View style={[styles.moodTag, { backgroundColor: meta.tint + '33' }]}>
-                        <meta.Icon size={12} color={meta.accent} />
-                        <Text style={styles.moodTagText}>{entry.mood}</Text>
-                      </View>
-                    </View>
-                    <meta.Icon size={22} color={meta.accent} />
-                  </View>
-                  <Text style={styles.entryPreview}>{entry.note}</Text>
+            groupedEntries.map((group, gi) => (
+              <View key={group.label} style={gi > 0 ? styles.dayGroup : undefined}>
+                <View style={styles.dayHeader}>
+                  <Text style={styles.dayHeaderText}>{group.label}</Text>
+                  <View style={styles.dayHeaderLine} />
+                  <Text style={styles.dayHeaderCount}>
+                    {group.items.length} {group.items.length === 1 ? 'note' : 'notes'}
+                  </Text>
                 </View>
-              );
-            })
+                {group.items.map((entry, i) => (
+                  <EntryItem key={entry.id} entry={entry} index={i} />
+                ))}
+              </View>
+            ))
           )}
         </ScrollView>
         )}
@@ -491,41 +550,55 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.text },
   countChip: { backgroundColor: 'rgba(91,155,213,0.12)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   countChipText: { fontSize: 11, fontWeight: '700', color: Colors.primaryDark },
-  entryCard: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: 16,
+  // Day grouping header
+  dayGroup: { marginTop: 18 },
+  dayHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  dayHeaderText: { fontSize: 12, fontWeight: '800', color: Colors.textMuted, letterSpacing: 0.6, textTransform: 'uppercase' },
+  dayHeaderLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dayHeaderCount: { fontSize: 11, fontWeight: '600', color: Colors.textLight },
+
+  // Warm "paper" entry card
+  paperCard: {
+    flexDirection: 'row',
+    gap: 14,
+    backgroundColor: '#FFFDF8',
+    borderRadius: 18,
     padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    borderColor: '#F1E8E2',
+    shadowColor: '#6b5b4a',
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  entryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  entryDate: { fontSize: 10, color: Colors.textLight, letterSpacing: 0.5 },
-  entryTitle: { fontSize: 15, fontWeight: '600', color: Colors.text, marginTop: 4 },
-  moodTag: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6 },
-  moodTagText: { fontSize: 11, fontWeight: '700', color: Colors.text },
+  moodAvatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  paperTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  moodLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  moodDot: { width: 7, height: 7, borderRadius: 4 },
+  moodName: { fontSize: 13, fontWeight: '800', letterSpacing: 0.2 },
+  paperTime: { fontSize: 11, color: Colors.textLight, fontWeight: '600' },
+  paperNote: { fontFamily: SERIF, fontSize: 15.5, color: '#2c2620', lineHeight: 24 },
   emptyCard: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: 16,
-    padding: 28,
+    backgroundColor: '#FFFDF8',
+    borderRadius: 20,
+    padding: 32,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#F1E8E2',
+    marginTop: 8,
   },
-  emptyTitle: { fontSize: 15, fontWeight: '700', color: Colors.text },
-  emptyText: { fontSize: 13, color: Colors.textMuted, textAlign: 'center', lineHeight: 19 },
-  anxietyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  anxietyPill: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  anxietyDot: { width: 8, height: 8, borderRadius: 4 },
-  anxietyText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
-  anxietyMeter: { flexDirection: 'row', gap: 3, alignItems: 'center' },
-  meterSeg: { width: 12, height: 5, borderRadius: 3 },
-  entryPreview: { fontSize: 13, color: Colors.textMuted, lineHeight: 20, marginBottom: 10 },
-  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  tag: { backgroundColor: Colors.bg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.primaryLight },
-  tagText: { fontSize: 11, color: Colors.primaryDark, fontWeight: '500' },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(122,184,154,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.text },
+  emptyText: { fontSize: 13, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
 });

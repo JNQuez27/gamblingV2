@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 
@@ -94,6 +94,19 @@ export const supabase = createClient(url ?? '', anonKey ?? '', {
     storage: storageAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false, // no web redirect flow on Android
+    detectSessionInUrl: false, // we handle the deep-link redirect ourselves
+    flowType: 'pkce', // OAuth + password reset both use the code flow on native
   },
 });
+
+// React Native gotcha: autoRefreshToken only runs while we explicitly keep it
+// running. Tie it to app foreground/background so the ~1h access token gets
+// refreshed in time - without this, calls after the app sits idle fail with
+// "JWT expired". (Supabase RN docs.)
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') supabase.auth.startAutoRefresh();
+    else supabase.auth.stopAutoRefresh();
+  });
+  supabase.auth.startAutoRefresh(); // kick it off for the current foreground session
+}

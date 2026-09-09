@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
+  Image,
   Animated,
   Easing,
   Modal,
@@ -20,12 +21,15 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Polyline, Circle } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
-import { peso, limitProximity, savingsReinforcement } from '@/utils/mathEngine';
+import { peso, limitProximity } from '@/utils/mathEngine';
 import { explainBand } from '@/utils/thresholdEngine';
-import { PH_ALTERNATIVES, PAGCOR_REFERENCE_BETS } from '@/constants/phPrices';
+import { PH_ALTERNATIVES } from '@/constants/phPrices';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useAuth } from '@/hooks/useAuth';
 import { todayKey, daysBetween } from '@/utils/date';
+import type { GamblingUsageLog } from '@/types/usage';
+import { GAMBLING_APP_PRESETS } from '@/constants/gamblingApps';
+import { getGamblingAppIcon } from '@/services/gamblingDetection.service';
 import {
   IconFlame,
   IconWallet,
@@ -150,7 +154,12 @@ export default function HomeScreen() {
   const [betAmount, setBetAmount] = useState('');
   const [betLogState, setBetLogState] = useState<'idle' | 'saving' | 'done'>('idle');
   const [notifOpen, setNotifOpen] = useState(false);
-  const [readNotifs, setReadNotifs] = useState<number[]>([]);
+  const [readNotifs, setReadNotifs] = useState<string[]>([]);
+  // Real launcher icons for gambling apps opened today (resolved on-device).
+  const [appIcons, setAppIcons] = useState<Record<string, string>>({});
+
+  // Site logos aren't on the device, so use a favicon service for websites.
+  const faviconUrl = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
   const [rcIndex, setRcIndex] = useState(0);
 
   const { width: winW } = useWindowDimensions();
@@ -160,9 +169,12 @@ export default function HomeScreen() {
   // Everything below keys off the real clock.
   const now = new Date();
   const todayIndex = (now.getDay() + 6) % 7; // 0 = Monday
+  // Greeting shows first name only. Fall back to the first word of any full
+  // name, then the email handle.
   const displayName =
-    user?.displayName || (user?.email ? user.email.split('@')[0] : 'friend');
-  const sessionCost = PAGCOR_REFERENCE_BETS.averageSessionSpend;
+    user?.firstName ||
+    user?.displayName?.split(' ')[0] ||
+    (user?.email ? user.email.split('@')[0] : 'friend');
 
   // Recent Insights - patterns pulled from the user's own logs this week.
   const thisWeekOpens = usageLogs.filter((l) => {
@@ -191,9 +203,6 @@ export default function HomeScreen() {
     const cards: { Icon: React.ComponentType<{ size?: number; color?: string }>; text: string }[] = [
       { Icon: IconBulb, text: 'Urges usually peak for about 10 minutes. Pause and ride the wave - it passes.' },
     ];
-    if (streak > 0) {
-      cards.push({ Icon: IconWallet, text: savingsReinforcement(streak, sessionCost) });
-    }
     if (spendingSummary && spendingSummary.limit > 0) {
       cards.push({ Icon: IconTarget, text: limitProximity(spendingSummary) });
     }
@@ -207,33 +216,90 @@ export default function HomeScreen() {
       { Icon: IconLeaf, text: 'Every bet-free day rewires the habit loop a little more.' },
     );
     return cards;
-  }, [streak, spendingSummary, topGamblingApps, usageBand, sessionCost]);
+  }, [streak, spendingSummary, topGamblingApps, usageBand]);
+
+  // Resolve real launcher icons for any gambling APPS opened today (on-device,
+  // no network). Sites use a favicon URL instead (handled in the memo below).
+  useEffect(() => {
+    const today = todayKey();
+    const pkgs = new Set<string>();
+    usageLogs
+      .filter((l) => l.loggedDate === today)
+      .forEach((l) => {
+        const preset = GAMBLING_APP_PRESETS.find((p) => p.name === l.appName);
+        if (preset?.androidPackage) pkgs.add(preset.androidPackage);
+      });
+    const missing = [...pkgs].filter((p) => !(p in appIcons));
+    if (missing.length === 0) return;
+    const next: Record<string, string> = {};
+    for (const p of missing) {
+      const uri = getGamblingAppIcon(p);
+      if (uri) next[p] = uri;
+    }
+    if (Object.keys(next).length) setAppIcons((prev) => ({ ...prev, ...next }));
+  }, [usageLogs, appIcons]);
 
   // In-app notifications shown by the bell - generated from live state.
   const notifs = useMemo(() => {
     const list: {
-      id: number;
+      id: string;
       Icon: React.ComponentType<{ size?: number; color?: string }>;
       color: string;
+      logo?: string;
       title: string;
       body: string;
       time: string;
     }[] = [];
+
+    // Gambling app/site detections (from the background monitor - each open is
+    // logged to usageLogs). Surface today's most recent ones first so the bell
+    // mirrors the system nudge with an in-app record of what was opened.
+    const today = todayKey();
+    const byTarget = new Map<string, GamblingUsageLog>(); // newest open per app/site
+    usageLogs
+      .filter((l) => l.loggedDate === today)
+      .forEach((l) => {
+        const prev = byTarget.get(l.appName);
+        if (!prev || +new Date(l.createdAt) > +new Date(prev.createdAt)) byTarget.set(l.appName, l);
+      });
+    [...byTarget.values()]
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+      .slice(0, 3)
+      .forEach((l) => {
+        const preset = GAMBLING_APP_PRESETS.find((p) => p.name === l.appName);
+        const pkg = preset?.androidPackage ?? null;
+        const domain = l.appName.includes('.') ? l.appName : preset?.domains?.[0] ?? null;
+        const appLogo = pkg ? appIcons[pkg] : undefined;
+        // Real app icon if we have it, else the site's favicon.
+        const logo = appLogo ?? (domain ? faviconUrl(domain) : undefined);
+        const isSite = !appLogo && !!domain;
+        const mins = Math.max(0, Math.floor((Date.now() - +new Date(l.createdAt)) / 60000));
+        const time = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : 'today';
+        list.push({
+          id: `gamble-${l.id}`,
+          Icon: IconActivity,
+          color: '#c9433f',
+          logo,
+          title: isSite ? 'Gambling site visited' : 'Gambling app opened',
+          body: `You opened ${l.appName}. Take a breath before you continue - the urge fades in ~10 minutes.`,
+          time,
+        });
+      });
+
     if (weeklyCheckinDue) {
-      list.push({ id: 1, Icon: IconClipboard, color: Colors.primaryDark, title: 'Weekly check-in due', body: 'Five quick questions about your week. One minute, tops.', time: 'now' });
+      list.push({ id: 'weekly-checkin', Icon: IconClipboard, color: Colors.primaryDark, title: 'Weekly check-in due', body: 'Five quick questions about your week. One minute, tops.', time: 'now' });
     }
     if (streak > 0) {
-      list.push({ id: 2, Icon: IconFlame, color: '#d99a3a', title: 'Streak milestone', body: `${streak} bet-free day${streak === 1 ? '' : 's'} in a row - keep it going!`, time: 'today' });
-      list.push({ id: 3, Icon: IconWallet, color: Colors.secondaryDark, title: 'Money kept', body: `You've held on to about ${peso(streak * sessionCost)} so far.`, time: 'today' });
+      list.push({ id: 'streak', Icon: IconFlame, color: '#d99a3a', title: 'Streak milestone', body: `${streak} bet-free day${streak === 1 ? '' : 's'} in a row - keep it going!`, time: 'today' });
     }
     if (spendingSummary && spendingSummary.limit > 0 && spendingSummary.isCritical) {
-      list.push({ id: 4, Icon: IconTarget, color: '#c9433f', title: 'Limit reminder', body: limitProximity(spendingSummary), time: 'today' });
+      list.push({ id: 'limit', Icon: IconTarget, color: '#c9433f', title: 'Limit reminder', body: limitProximity(spendingSummary), time: 'today' });
     }
     if (!streakMarked) {
-      list.push({ id: 5, Icon: IconClock, color: Colors.textMuted, title: 'Daily check-in', body: 'How are you feeling today? Take a moment.', time: 'today' });
+      list.push({ id: 'daily', Icon: IconClock, color: Colors.textMuted, title: 'Daily check-in', body: 'How are you feeling today? Take a moment.', time: 'today' });
     }
     return list;
-  }, [weeklyCheckinDue, streak, streakMarked, spendingSummary, sessionCost]);
+  }, [usageLogs, appIcons, weeklyCheckinDue, streak, streakMarked, spendingSummary]);
 
   // Reality Check: gentle auto-advance that slides to the next card. Manual
   // swipes update the index via onMomentumScrollEnd below.
@@ -408,8 +474,8 @@ export default function HomeScreen() {
             >
               <IconClipboard size={20} color={Colors.primaryDark} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.checkinBannerTitle}>Weekly check-in due</Text>
-                <Text style={styles.checkinBannerSub}>Five quick questions about your week - one minute.</Text>
+                <Text style={styles.checkinBannerTitle}>Distress check-in due</Text>
+                <Text style={styles.checkinBannerSub}>Ten quick questions about how you've been feeling.</Text>
               </View>
               <Text style={styles.checkinBannerGo}>Answer →</Text>
             </TouchableOpacity>
@@ -508,7 +574,7 @@ export default function HomeScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.resultCleanTitle}>Today is already logged.</Text>
-                  <Text style={styles.resultCleanSub}>Current streak: {streak} day{streak === 1 ? '' : 's'} - around {peso(streak * sessionCost)} kept.</Text>
+                  <Text style={styles.resultCleanSub}>Current streak: {streak} bet-free day{streak === 1 ? '' : 's'}.</Text>
                 </View>
               </View>
             ) : dayStatus === null ? (
@@ -549,7 +615,7 @@ export default function HomeScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.resultCleanTitle}>Bet-free day logged!</Text>
-                  <Text style={styles.resultCleanSub}>That's {streak} day{streak === 1 ? '' : 's'} - around {peso(streak * sessionCost)} kept.</Text>
+                  <Text style={styles.resultCleanSub}>That's {streak} bet-free day{streak === 1 ? '' : 's'} in a row.</Text>
                 </View>
               </View>
             ) : (
@@ -695,7 +761,11 @@ export default function HomeScreen() {
                 return (
                   <View key={n.id} style={[styles.notifItem, isUnread && styles.notifItemUnread]}>
                     <View style={styles.notifIcon}>
-                      <n.Icon size={17} color={n.color} />
+                      {n.logo ? (
+                        <Image source={{ uri: n.logo }} style={styles.notifLogo} />
+                      ) : (
+                        <n.Icon size={17} color={n.color} />
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={styles.notifItemTop}>
@@ -877,7 +947,8 @@ const styles = StyleSheet.create({
   notifMarkAll: { fontSize: 12, fontWeight: '600', color: Colors.primary },
   notifItem: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', padding: 12, borderRadius: 14 },
   notifItemUnread: { backgroundColor: '#f2f8fd' },
-  notifIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center' },
+  notifIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  notifLogo: { width: 30, height: 30, borderRadius: 7 },
   notifItemTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   notifItemTitle: { fontSize: 14, fontWeight: '700', color: Colors.text },
   notifTime: { fontSize: 11, color: Colors.textLight },

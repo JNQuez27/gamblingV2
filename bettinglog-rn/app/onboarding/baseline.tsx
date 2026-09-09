@@ -61,7 +61,7 @@ export default function BaselineScreen() {
 
   return (
     <OnboardingScaffold
-      step={3}
+      step={5}
       title="A quick baseline"
       subtitle="Thinking about the past 12 months… honest answers become the starting line we measure progress from. A self-check, not a diagnosis."
       illustration={<GaugeIllustration />}
@@ -73,12 +73,37 @@ export default function BaselineScreen() {
         />
       }
     >
-      {/* Live progress chip */}
-      <View style={[styles.countChip, allAnswered && styles.countChipDone]}>
-        <Text style={[styles.countChipText, allAnswered && styles.countChipTextDone]}>
+      {/* Live progress bar */}
+      <View style={styles.progressWrap}>
+        <Text style={[styles.progressLabel, allAnswered && styles.progressLabelDone]}>
           {allAnswered ? 'All questions answered' : `${answeredCount} of ${PGSI_ITEMS.length} answered`}
         </Text>
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              allAnswered && styles.progressFillDone,
+              { width: `${(answeredCount / PGSI_ITEMS.length) * 100}%` },
+            ]}
+          />
+        </View>
       </View>
+
+      {/* Baseline result shown up top once every question is answered */}
+      {result && (
+        <PopIn>
+          <View style={styles.resultCard}>
+            <Text style={styles.resultLabel}>YOUR BASELINE</Text>
+            <Text style={styles.resultText}>
+              {result.category} · score {result.totalScore} / 27
+            </Text>
+            <Text style={styles.resultSub}>
+              Wherever this lands, it's just the starting point - the app measures
+              your progress from here.
+            </Text>
+          </View>
+        </PopIn>
+      )}
 
       {PGSI_ITEMS.map((item, i) => (
         <PopIn key={item.id} index={i}>
@@ -106,37 +131,22 @@ export default function BaselineScreen() {
           </View>
         </PopIn>
       ))}
-
-      {result && (
-        <PopIn>
-          <View style={styles.resultCard}>
-            <Text style={styles.resultLabel}>YOUR BASELINE</Text>
-            <Text style={styles.resultText}>
-              {result.category} · score {result.totalScore} / 27
-            </Text>
-            <Text style={styles.resultSub}>
-              Wherever this lands, it's just the starting point - the app measures
-              your progress from here.
-            </Text>
-          </View>
-        </PopIn>
-      )}
     </OnboardingScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  countChip: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(91,155,213,0.12)',
+  progressWrap: { marginBottom: 16 },
+  progressLabel: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark, marginBottom: 6 },
+  progressLabelDone: { color: Colors.secondaryDark },
+  progressTrack: {
+    height: 8,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    marginBottom: 14,
+    backgroundColor: 'rgba(91,155,213,0.12)',
+    overflow: 'hidden',
   },
-  countChipDone: { backgroundColor: 'rgba(122,184,154,0.18)' },
-  countChipText: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark },
-  countChipTextDone: { color: Colors.secondaryDark },
+  progressFill: { height: '100%', borderRadius: 999, backgroundColor: Colors.primary },
+  progressFillDone: { backgroundColor: Colors.secondaryDark },
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius: 16,

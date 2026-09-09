@@ -135,6 +135,17 @@ export function isNativeMonitorAvailable(): boolean {
   return !!NativeMonitor && Platform.OS === 'android';
 }
 
+// The installed gambling app's real launcher icon (PNG data-URI), fetched
+// on-device via the native module. null when unavailable (module absent, app
+// not installed, or not visible to PackageManager).
+export function getGamblingAppIcon(pkg: string): string | null {
+  try {
+    return NativeMonitor?.getAppIcon(pkg) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Every catalog entry with a known Android package - what the service watches.
 function watchlistPackages(): string[] {
   return GAMBLING_APP_PRESETS
@@ -152,22 +163,30 @@ function blocklistDomains(): string[] {
   return [...new Set(all)];
 }
 
-// ── Throttling (so it is never annoying) ─────────────────────────
-const NUDGE_COOLDOWN_MS = 45 * 60 * 1000; // at most one nudge per 45 minutes
-const MAX_NUDGES_PER_DAY = 6;
+// ── Throttling (per target, so it never spams yet never misses) ──
+// The cooldown is keyed by the specific app/site: opening a DIFFERENT gambling
+// target always nudges, but re-opening the SAME one within the window is quiet.
+// A global daily cap is kept only as a runaway safety valve. Previously this was
+// a single 45-min global cooldown, which silently swallowed a website nudge if
+// any app nudge had fired recently - the whole reason a real site visit felt
+// undetected.
+const PER_TARGET_COOLDOWN_MS = 5 * 60 * 1000; // same app/site: at most once / 5 min
+const MAX_NUDGES_PER_DAY = 12;                // global cap across all targets
 
-let lastNudgeAt = 0;
 let nudgesToday = 0;
 let nudgeDayKey = '';
+const lastNudgeByTarget = new Map<string, number>();
 
-function canNudgeNow(): boolean {
+function canNudgeFor(key: string): boolean {
   const today = todayKey();
   if (nudgeDayKey !== today) {
     nudgeDayKey = today;
     nudgesToday = 0;
+    lastNudgeByTarget.clear();
   }
   if (nudgesToday >= MAX_NUDGES_PER_DAY) return false;
-  return Date.now() - lastNudgeAt >= NUDGE_COOLDOWN_MS;
+  const last = lastNudgeByTarget.get(key) ?? 0;
+  return Date.now() - last >= PER_TARGET_COOLDOWN_MS;
 }
 
 // ── Runtime state ────────────────────────────────────────────────
@@ -187,7 +206,8 @@ export async function handleDetection(match: DetectionMatch): Promise<void> {
   }
   ctx?.onDetected?.(match);
 
-  if (!canNudgeNow()) return;
+  const key = `${match.source}:${match.name.toLowerCase()}`;
+  if (!canNudgeFor(key)) return;
 
   const nudge = buildGamblingNudge({
     appName: match.name,
@@ -200,7 +220,7 @@ export async function handleDetection(match: DetectionMatch): Promise<void> {
   // on web. Quiet-hours are honoured by passing prefs when available.
   const sent = await sendImmediateAlert(nudge.title, nudge.body);
   if (sent) {
-    lastNudgeAt = Date.now();
+    lastNudgeByTarget.set(key, Date.now());
     nudgesToday += 1;
   }
 }

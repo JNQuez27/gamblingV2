@@ -1,7 +1,7 @@
 import type { MoralReasoningLevel, ReadinessStage, RiskLevel } from '@/types/psychology';
 import type { SpendingSummary } from '@/types/spending';
 import type { UsageBand } from '@/types/usage';
-import { peso, opportunityCost, limitProximity, savingsReinforcement } from '@/utils/mathEngine';
+import { peso, opportunityCost, limitProximity } from '@/utils/mathEngine';
 import { PAGCOR_REFERENCE_BETS } from '@/constants/phPrices';
 
 // Rule-based reply generator for the in-app consultation. Pure function:
@@ -90,7 +90,7 @@ export function generateAppReply(userText: string, ctx: ConsultationContext): st
   } else if (/slip|relapse|failed|gambled again|natalo/.test(text)) {
     parts.push('A slip is data, not a verdict. What mattered most is that you told the truth about it.');
     if (ctx.streak > 0) {
-      parts.push(savingsReinforcement(ctx.streak, sessionCost));
+      parts.push(`Before this, you had ${ctx.streak} bet-free day${ctx.streak === 1 ? '' : 's'} - that progress is still real.`);
     }
     parts.push(stageAction(ctx.readinessStage));
   } else if (/app|open|kept opening|screen time/.test(text) && ctx.usageBand) {

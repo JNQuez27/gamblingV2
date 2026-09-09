@@ -24,24 +24,28 @@ import {
   Easing,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Rect, Circle } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { useAppContext } from '@/hooks/useAppContext';
-import { PAGCOR_REFERENCE_BETS } from '@/constants/phPrices';
 import { IconX, IconLeaf } from '@/components/ui/icons';
 import Mascot from '@/components/ui/Mascot';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const USE_NATIVE = Platform.OS !== 'web';
 
+// Serif body to match the Diary Notes "paper" journal treatment (Noto Serif on
+// Android, Georgia on iOS).
+const SERIF = Platform.OS === 'ios' ? 'Georgia' : 'serif';
+
 const NODE = 64;
 const LEVEL_GAP = 180; // roomy enough for the badge + mascot stack above the current node
 const TOP_PAD = 130;
 const BOTTOM_PAD = 80;
 
-// How many completed days to draw on the trail (keeps the board a sane height).
-const MAX_DONE_NODES = 6;
+// Fast-navigation rail: once the trail is this long, show a column of evenly
+// spaced day markers so the user can jump instead of scrolling endlessly.
+const SECTOR_MIN_DAYS = 100;
+const SECTOR_COUNT = 10;
 
 // Zig-zag column positions (fraction of screen width), cycled down the trail.
 const X_LANES = [0.5, 0.66, 0.34, 0.6, 0.4, 0.66, 0.33, 0.5];
@@ -54,7 +58,6 @@ type DayDetail = {
   mood: string;
   note: string;
   amount?: number; // spent, when the user gambled
-  saved?: number; // kept, on a bet-free day
   trigger?: string;
 };
 
@@ -72,30 +75,22 @@ function looksGambled(note: string): boolean {
   return /slip|gambled|natalo/i.test(note);
 }
 
-// Faint palette-tinted specks that give the board quiet depth.
-const AMBIENT_DOTS = [
-  { x: 0.12, y: 100, r: 3, c: Colors.primary, o: 0.3 },
-  { x: 0.85, y: 160, r: 2, c: Colors.secondary, o: 0.35 },
-  { x: 0.2, y: 270, r: 2.5, c: Colors.secondary, o: 0.28 },
-  { x: 0.9, y: 340, r: 3, c: Colors.primary, o: 0.25 },
-  { x: 0.15, y: 440, r: 2, c: Colors.accent, o: 0.35 },
-  { x: 0.82, y: 510, r: 2.5, c: Colors.primary, o: 0.28 },
-  { x: 0.6, y: 620, r: 2, c: Colors.secondary, o: 0.3 },
-];
-
-// Dotted guide path: flows in from the top edge, snakes through every node,
-// then exits toward the bottom for future levels.
-function buildPath(points: { x: number; y: number }[], mapHeight: number): string {
-  const first = points[0];
-  let d = `M ${first.x + 70} -30 C ${first.x + 60} ${first.y - 90}, ${first.x} ${first.y - 70}, ${first.x} ${first.y}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    d += ` C ${a.x} ${a.y + LEVEL_GAP * 0.5}, ${b.x} ${b.y - LEVEL_GAP * 0.5}, ${b.x} ${b.y}`;
-  }
-  const last = points[points.length - 1];
-  d += ` C ${last.x} ${last.y + 60}, ${last.x - 40} ${last.y + 70}, ${last.x - 50} ${mapHeight + 30}`;
-  return d;
+// One dotted connector between two consecutive nodes, drawn as its own small
+// Svg. Rendering the whole trail as a single tall Svg crashes past Android's
+// max canvas/texture size (~100+ day boards), so we tile it per segment.
+function TrailSegment({ a, b }: { a: { x: number; y: number }; b: { x: number; y: number } }) {
+  const M = 70; // horizontal margin for the curve's overshoot
+  const left = Math.min(a.x, b.x) - M;
+  const width = Math.abs(b.x - a.x) + 2 * M;
+  const height = b.y - a.y;
+  const ax = a.x - left;
+  const bx = b.x - left;
+  const d = `M ${ax} 0 C ${ax} ${LEVEL_GAP * 0.5}, ${bx} ${height - LEVEL_GAP * 0.5}, ${bx} ${height}`;
+  return (
+    <Svg style={{ position: 'absolute', left, top: a.y }} width={width} height={height} pointerEvents="none">
+      <Path d={d} stroke="#b9cbdc" strokeWidth={3.5} strokeDasharray="1 11" strokeLinecap="round" fill="none" />
+    </Svg>
+  );
 }
 
 export default function JourneyMap() {
@@ -105,7 +100,7 @@ export default function JourneyMap() {
   // One completed node per logged day (newest first), built from the user's
   // real diary history. Each day's outcome and note come from that day's entry.
   const days = useMemo(() => {
-    return Object.keys(diaryEntries)
+    const real = Object.keys(diaryEntries)
       .sort((a, b) => b.localeCompare(a)) // most recent date first
       .map((dateKey) => {
         const dayEntries = diaryEntries[dateKey];
@@ -118,6 +113,7 @@ export default function JourneyMap() {
           gambled: looksGambled(combined),
         };
       });
+    return real;
   }, [diaryEntries]);
 
   // Levels: a locked "future" node at the top, the current node, then a
@@ -130,7 +126,7 @@ export default function JourneyMap() {
       { level: totalDays + 2, status: 'locked', x: X_LANES[0] },
       { level: totalDays + 1, status: 'current', x: X_LANES[1] },
     ];
-    days.slice(0, MAX_DONE_NODES).forEach((d, i) => {
+    days.forEach((d, i) => {
       out.push({
         level: totalDays - i,
         status: 'done',
@@ -140,7 +136,6 @@ export default function JourneyMap() {
           gambled: d.gambled,
           mood: d.mood,
           note: d.note,
-          saved: d.gambled ? undefined : PAGCOR_REFERENCE_BETS.averageSessionSpend,
         },
       });
     });
@@ -164,10 +159,37 @@ export default function JourneyMap() {
   );
   const pulse = useRef(new Animated.Value(0)).current;
   const detailAnim = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Long trails (100+ days) get a pinned jump-rail: ~10 evenly-spaced day
+  // markers so the user can leap anywhere - including straight back to day 1 -
+  // instead of scrolling forever.
+  const totalDays = days.length;
+  const levelY = useMemo(() => {
+    const m = new Map<number, number>();
+    levels.forEach((l, i) => m.set(l.level, points[i].y));
+    return m;
+  }, [levels, points]);
+  const sectors = useMemo(() => {
+    if (totalDays < SECTOR_MIN_DAYS) return [];
+    const anchors: number[] = [];
+    for (let k = 0; k < SECTOR_COUNT; k++) {
+      const day = Math.round(totalDays - (k * (totalDays - 1)) / (SECTOR_COUNT - 1));
+      anchors.push(Math.max(1, day));
+    }
+    return [...new Set(anchors)]; // newest (top) → day 1 (bottom)
+  }, [totalDays]);
+  const jumpToDay = (day: number) => {
+    const y = levelY.get(day);
+    if (y != null) scrollRef.current?.scrollTo({ y: Math.max(0, y - 130), animated: true });
+  };
 
   useEffect(() => {
+    // Keep the whole cascade ~1.4s no matter how many nodes, so a 100-day trail
+    // doesn't animate in for 12 seconds.
+    const step = Math.max(10, Math.min(120, Math.floor(1400 / Math.max(1, nodeAnims.length))));
     Animated.stagger(
-      120,
+      step,
       nodeAnims.map((a) =>
         Animated.spring(a, { toValue: 1, friction: 7, tension: 60, useNativeDriver: USE_NATIVE })
       )
@@ -210,30 +232,16 @@ export default function JourneyMap() {
 
   return (
     <View style={styles.wrapper}>
-      {/* Only the board scrolls - the screen header and toggle stay fixed. */}
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <LinearGradient
-          colors={[Colors.bg, '#eef2ef', Colors.bg]}
-          style={[styles.board, { height: boardHeight }]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-        >
-          <Svg width={SCREEN_W} height={boardHeight} style={StyleSheet.absoluteFill} pointerEvents="none">
-            {/* Soft glow pools for depth */}
-            <Circle cx={SCREEN_W * 0.88} cy={140} r={95} fill={Colors.primary} fillOpacity={0.06} />
-            <Circle cx={SCREEN_W * 0.1} cy={530} r={110} fill={Colors.secondary} fillOpacity={0.07} />
-            {AMBIENT_DOTS.map((d, i) => (
-              <Circle key={i} cx={d.x * SCREEN_W} cy={d.y} r={d.r} fill={d.c} fillOpacity={d.o} />
-            ))}
-            <Path
-              d={buildPath(points, mapHeight)}
-              stroke="#b9cbdc"
-              strokeWidth={3.5}
-              strokeDasharray="1 11"
-              strokeLinecap="round"
-              fill="none"
-            />
-          </Svg>
+      {/* Only the board scrolls - the screen header and toggle stay fixed.
+          flex:1 bounds the ScrollView to the viewport so a tall board (many
+          logged days) actually scrolls instead of clipping. */}
+      <ScrollView ref={scrollRef} style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={[styles.board, { height: boardHeight }]}>
+          {/* Dotted trail: one small Svg per gap (see TrailSegment) so a long
+              board never becomes a single oversized canvas. */}
+          {points.slice(0, -1).map((a, i) => (
+            <TrailSegment key={i} a={a} b={points[i + 1]} />
+          ))}
 
           {levels.map((lvl, i) => {
             const { x, y } = points[i];
@@ -307,8 +315,26 @@ export default function JourneyMap() {
           <View style={styles.captionWrap} pointerEvents="none">
             <Text style={styles.caption}>Every step counts</Text>
           </View>
-        </LinearGradient>
+        </View>
       </ScrollView>
+
+      {/* Fast-navigation rail (long trails only) */}
+      {sectors.length > 0 && (
+        <View style={styles.sectorRail}>
+          {sectors.map((day) => (
+            <TouchableOpacity
+              key={day}
+              style={[styles.sectorPill, day === 1 && styles.sectorPillEnd]}
+              onPress={() => jumpToDay(day)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={day === 1 ? 'Jump to day 1' : `Jump to day ${day}`}
+            >
+              <Text style={[styles.sectorText, day === 1 && styles.sectorTextEnd]}>{day}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Pinned overlays */}
       <View style={styles.pinnedTop} pointerEvents="none">
@@ -361,12 +387,6 @@ export default function JourneyMap() {
           </View>
 
           <View style={styles.detailRows}>
-            {!selectedLevel.detail.gambled && selectedLevel.detail.saved != null && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailRowLabel}>Money kept</Text>
-                <Text style={styles.detailRowValue}>₱{selectedLevel.detail.saved}</Text>
-              </View>
-            )}
             <View style={styles.detailRow}>
               <Text style={styles.detailRowLabel}>Mood</Text>
               <Text style={styles.detailRowValue}>{selectedLevel.detail.mood}</Text>
@@ -387,7 +407,36 @@ export default function JourneyMap() {
 
 const styles = StyleSheet.create({
   wrapper: { flex: 1, backgroundColor: Colors.bg },
-  board: { width: '100%' },
+  scroll: { flex: 1 },
+  board: { width: '100%', backgroundColor: Colors.bg },
+
+  // Fast-navigation rail
+  sectorRail: {
+    position: 'absolute',
+    right: 6,
+    top: 90,
+    bottom: 100, // clear the compose FAB at the bottom-right
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectorPill: {
+    minWidth: 36,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    shadowColor: '#22303e',
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  sectorPillEnd: { backgroundColor: Colors.primary, borderColor: Colors.primaryDark },
+  sectorText: { fontSize: 11, fontWeight: '800', color: Colors.primaryDark },
+  sectorTextEnd: { color: Colors.white },
   nodeWrap: { position: 'absolute', width: NODE, alignItems: 'center' },
 
   pinnedTop: { position: 'absolute', top: 12, left: 0, right: 0, alignItems: 'center', gap: 6 },
@@ -520,13 +569,13 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     bottom: 12,
-    backgroundColor: Colors.bgCard,
+    backgroundColor: '#FFFDF8',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
+    borderColor: '#F1E8E2',
+    shadowColor: '#6b5b4a',
+    shadowOpacity: 0.18,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
@@ -554,13 +603,13 @@ const styles = StyleSheet.create({
   detailRowLabel: { fontSize: 13, color: Colors.textMuted },
   detailRowValue: { fontSize: 13, fontWeight: '600', color: Colors.text },
   detailNote: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    fontStyle: 'italic',
-    lineHeight: 19,
+    fontFamily: SERIF,
+    fontSize: 14.5,
+    color: '#2c2620',
+    lineHeight: 22,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.primaryLight,
-    paddingLeft: 10,
+    borderLeftColor: '#E4D6C3',
+    paddingLeft: 12,
     marginBottom: 10,
   },
   detailFooter: { fontSize: 12, color: Colors.secondaryDark, fontWeight: '600' },

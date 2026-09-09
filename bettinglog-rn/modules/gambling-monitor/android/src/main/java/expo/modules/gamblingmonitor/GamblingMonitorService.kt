@@ -33,7 +33,12 @@ class GamblingMonitorService : Service() {
 
     private const val CHANNEL_ID = "gambling-monitor"
     private const val NOTIFICATION_ID = 0x6A6D // "gm"
-    private const val POLL_INTERVAL_MS = 1500L
+    // Fast poll so a gambling app is caught within ~half a second of opening.
+    // UsageStatsManager has no push/callback API, so the poll interval is the
+    // main source of detection latency — 400ms trades a little battery for a
+    // near-immediate nudge, which is the whole point of the feature.
+    // ponytail: fixed 400ms poll; only AccessibilityService gives true <100ms.
+    private const val POLL_INTERVAL_MS = 400L
 
     // Set by GamblingMonitorModule while JS is alive; null-safe on purpose —
     // if the JS runtime is gone there is nobody to nudge, so we drop the event.

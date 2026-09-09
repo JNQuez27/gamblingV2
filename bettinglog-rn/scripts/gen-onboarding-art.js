@@ -9,14 +9,23 @@
 const fs = require('fs');
 const path = require('path');
 
-const IMG_DIR = 'C:/Users/Quezada/Documents/CodeX/images';
-const OUT = path.join(__dirname, '..', 'constants', 'onboardingArt.ts');
+const IMG_DIR = path.join(__dirname, '..', 'assets', 'onboarding-src');
+const OUT = path.join(__dirname, '..', 'src', 'constants', 'onboardingArt.ts');
 
 // key -> source file. key is what splash.tsx references.
 const SOURCES = {
-  book: 'Book lover-bro.svg',       // "Know your pattern"
-  time: 'Time management-bro.svg',  // "Set your limits"
-  features: 'Features Overview-pana.svg', // "Grow your control"
+  diary: 'diary.svg',     // "Know your pattern"
+  savings: 'savings.svg', // "Set your limits"
+  goals: 'goals.svg',     // "Grow your control"
+};
+
+// StorySet ships these with one brand color (#92E3A9 green). Recolor each to
+// its slide's tint so the illustration matches the title accent. Green stays.
+const BRAND = /#92e3a9/gi;
+const RECOLOR = {
+  diary: '#8FB9EA',   // soft blue
+  savings: '#F2C25B', // soft amber
+  goals: '#92E3A9',   // keep green
 };
 
 function extractViewBox(svg) {
@@ -63,7 +72,8 @@ function groupId(group) {
 }
 
 function build(key, file) {
-  const svg = fs.readFileSync(path.join(IMG_DIR, file), 'utf8');
+  let svg = fs.readFileSync(path.join(IMG_DIR, file), 'utf8');
+  if (RECOLOR[key]) svg = svg.replace(BRAND, RECOLOR[key]);
   const viewBox = extractViewBox(svg);
   const defs = extractDefs(svg);
   // Body = everything after the </defs> (or after the opening <svg> if no defs)

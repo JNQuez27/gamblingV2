@@ -16,7 +16,7 @@ import {
 const ROWS: { key: keyof NotificationPreferences; label: string; desc: string }[] = [
   { key: 'mathEngine', label: 'Math-engine insights', desc: 'Opportunity-cost and spending math from your own data' },
   { key: 'checklist', label: 'Daily checklist', desc: 'A short actionable list to keep the habit loop healthy' },
-  { key: 'weeklyCheckin', label: 'Weekly check-in', desc: 'The recurring questionnaire that tracks your progress (Sunday 7 PM)' },
+  { key: 'weeklyCheckin', label: 'Distress check-in', desc: 'A recurring set of ten questions that tracks your progress (Sunday 7 PM)' },
 ];
 
 export default function NotificationsScreen() {

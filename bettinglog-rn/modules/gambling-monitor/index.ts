@@ -17,6 +17,9 @@ declare class GamblingMonitorModule extends NativeModule<GamblingMonitorEvents> 
   startMonitoring(): void;
   // Stops the service and clears its persistent notification.
   stopMonitoring(): void;
+  // The installed app's launcher icon as a PNG data-URI (on-device, no network),
+  // or null if the package isn't installed/visible.
+  getAppIcon(pkg: string): string | null;
   // Opens Settings → Usage Access if needed; resolves to whether access is
   // granted once the user returns to the app.
   requestPermissions(): Promise<boolean>;
