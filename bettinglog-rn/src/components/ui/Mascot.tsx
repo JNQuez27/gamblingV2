@@ -1,40 +1,98 @@
 // src/components/ui/Mascot.tsx
 //
-// "Drip" - the app's mascot: a serene water-drop with closed eyes and a
-// growth sprout (water for the wave logo, the sprout for growing one day at a
-// time). Shared by the diary journey map and the onboarding flow.
-import React from 'react';
-import Svg, { Path, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+// The app's mascot: the BettingLog dice character, alive rather than static.
+// Idle it breathes - a slow float with a gentle tilt, as if hovering. Tapping
+// it "rolls" the die: a full spin with a squash-and-stretch pop.
+//
+// Defaults to the simplified dice-only artwork, which stays readable down to
+// 54px (journey map, onboarding). Pass `source` for the full logo art.
+// All animation is transform-only so it runs on the native driver.
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, AccessibilityInfo } from 'react-native';
 
-export default function Mascot({ size = 54 }: { size?: number }) {
-  const gid = React.useId().replace(/[^a-zA-Z0-9]/g, '');
+const SIMPLE = require('../../../assets/mascot-simple.png');
+
+export default function Mascot({
+  size = 54,
+  source = SIMPLE,
+  interactive = true,
+}: {
+  size?: number;
+  source?: number;
+  interactive?: boolean;
+}) {
+  const idle = useRef(new Animated.Value(0)).current;
+  const roll = useRef(new Animated.Value(0)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  // Respect the OS "reduce motion" setting - this is a looping animation.
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => alive && setReduceMotion(v));
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.timing(idle, {
+        toValue: 1,
+        duration: 3200,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [idle, reduceMotion]);
+
+  const float = idle.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -size * 0.08, 0] });
+  const tilt = idle.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: ['0deg', '-4deg', '0deg', '4deg', '0deg'],
+  });
+
+  // Tap: one full rotation with a pop on the way round.
+  const spin = roll.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const pop = roll.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [1, 1.18, 0.93, 1] });
+
+  const playRoll = () => {
+    roll.setValue(0);
+    Animated.timing(roll, {
+      toValue: 1,
+      duration: 700,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const art = (
+    <Animated.Image
+      source={source}
+      style={{
+        width: size,
+        height: size,
+        transform: [{ translateY: float }, { rotate: tilt }, { rotate: spin }, { scale: pop }],
+      }}
+      resizeMode="contain"
+      accessibilityLabel="BettingLog mascot"
+    />
+  );
+
+  if (!interactive) return art;
+
   return (
-    <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-      <Defs>
-        <SvgGradient id={`mascotBody${gid}`} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#7ab5e8" />
-          <Stop offset="1" stopColor="#4a8bc7" />
-        </SvgGradient>
-      </Defs>
-      {/* sprout */}
-      <Path d="M32 12 L32 7" stroke="#4f9a74" strokeWidth="2" strokeLinecap="round" />
-      <Path d="M32 8 C32 4 34 1.5 38 1 C38 5 36 7.5 32 8" fill="#7ab89a" />
-      <Path d="M32 8 C32 4 30 1.5 26 1 C26 5 28 7.5 32 8" fill="#9ccbb2" />
-      {/* body */}
-      <Path
-        d="M32 12 C46 12 54 24 54 37 C54 50 44 58 32 58 C20 58 10 50 10 37 C10 24 18 12 32 12 Z"
-        fill={`url(#mascotBody${gid})`}
-      />
-      {/* highlight */}
-      <Circle cx="24" cy="24" r="5" fill="#ffffff" fillOpacity="0.35" />
-      {/* calm closed eyes */}
-      <Path d="M22 36 Q25 39 28 36" stroke="#1e3a5c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-      <Path d="M36 36 Q39 39 42 36" stroke="#1e3a5c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-      {/* smile */}
-      <Path d="M28 45 Q32 49 36 45" stroke="#1e3a5c" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-      {/* blush */}
-      <Circle cx="19" cy="42" r="3" fill="#f0a8a8" fillOpacity="0.55" />
-      <Circle cx="45" cy="42" r="3" fill="#f0a8a8" fillOpacity="0.55" />
-    </Svg>
+    <Pressable
+      onPress={playRoll}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel="BettingLog mascot, tap to roll"
+    >
+      {art}
+    </Pressable>
   );
 }

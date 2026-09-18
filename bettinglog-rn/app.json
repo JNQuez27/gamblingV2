@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "scheme": "bettinglog",
     "splash": {
       "backgroundColor": "#e8f4fd"
@@ -12,7 +13,8 @@
     "android": {
       "package": "com.bettinglog.app",
       "adaptiveIcon": {
-        "backgroundColor": "#e8f4fd"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#5FB56E"
       },
       "permissions": [
         "POST_NOTIFICATIONS"
@@ -28,7 +30,8 @@
       "expo-secure-store",
       "./plugins/withGamblingAppQueries",
       "expo-asset",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

@@ -188,6 +188,9 @@ const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children })
   // snapshots, so a nudge always uses the user's current numbers.
   const spendingSummaryRef = useRef<SpendingSummary | null>(null);
   const streakRef = useRef(0);
+  // Once we've shown any data (cache or fetch), later refreshes update in place
+  // rather than flipping the whole app back to the launch spinner.
+  const hasLoadedRef = useRef(false);
   useEffect(() => { spendingSummaryRef.current = spendingSummary; }, [spendingSummary]);
   useEffect(() => { streakRef.current = streak; }, [streak]);
 
@@ -327,7 +330,7 @@ const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children })
   // last cached snapshot is shown instead so the app never comes up empty.
   const refresh = async () => {
     if (!user) return;
-    setIsLoading(true);
+    if (!hasLoadedRef.current) setIsLoading(true); // only spin on the very first load
     try {
       await flushOutbox();
       const snap = await fetchSnapshot(user.id);
@@ -337,13 +340,32 @@ const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children })
       const cached = await loadSnapshot<Snapshot>(user.id);
       if (cached) applySnapshot(cached);
     } finally {
+      hasLoadedRef.current = true;
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user) refresh();
-    else setIsLoading(false);
+    hasLoadedRef.current = false;
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      // Show the last cached snapshot immediately so the app opens instantly
+      // (even offline), then refresh from the network in the background.
+      const cached = await loadSnapshot<Snapshot>(user.id);
+      if (cached && !cancelled) {
+        applySnapshot(cached);
+        hasLoadedRef.current = true;
+        setIsLoading(false);
+      }
+      if (!cancelled) await refresh();
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 

@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
+import { Logo } from '@/components/ui/Logo';
 import { useAuth } from '@/hooks/useAuth';
 import { signUpWithEmail, signInWithGoogle, friendlyAuthError } from '@/services/auth.service';
 
@@ -97,12 +98,8 @@ export default function LoginScreen() {
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {/* Header */}
             <View style={styles.header}>
-              <LinearGradient colors={[Colors.primaryDark, Colors.secondary]} style={styles.logoBox} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                <Svg width={30} height={30} viewBox="0 0 30 30" fill="none">
-                  <Circle cx="15" cy="15" r="12" stroke="white" strokeWidth="2" fill="none" />
-                  <Path d="M10 15 Q12.5 10 15 15 Q17.5 20 20 15" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-                </Svg>
-              </LinearGradient>
+              <Logo size={150} />
+              <View style={{ height: 18 }} />
               <Text style={styles.headline}>{mode === 'login' ? 'Welcome back' : 'Create your space'}</Text>
               <Text style={styles.subheadline}>
                 {mode === 'login' ? 'Your reflections are waiting for you.' : 'A calm place for self-awareness starts here.'}
@@ -278,19 +275,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { flexGrow: 1 },
   header: { padding: 28, paddingTop: 20, alignItems: 'center' },
-  logoBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
   headline: { fontSize: 26, fontWeight: '700', color: Colors.text, marginBottom: 6, letterSpacing: -0.5 },
   subheadline: { fontSize: 15, color: Colors.textMuted, textAlign: 'center' },
   card: {

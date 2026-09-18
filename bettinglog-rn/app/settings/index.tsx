@@ -29,11 +29,6 @@ import {
   IconWallet,
   IconLock,
   IconClipboard,
-  IconGlobe,
-  IconMoon,
-  IconDownload,
-  IconHelpCircle,
-  IconStar,
   IconBell,
   IconLogOut,
   IconTrash,
@@ -379,21 +374,7 @@ export default function SettingsScreen() {
               />
             </View>
             <View style={styles.divider} />
-            <SettingsRow Icon={IconClipboard} label="Privacy Policy" onPress={() => {}} />
-          </View>
-
-          {/* General */}
-          <SectionHeader>General</SectionHeader>
-          <View style={styles.group}>
-            <SettingsRow Icon={IconGlobe} label="Language" desc="English" onPress={() => {}} />
-            <View style={styles.divider} />
-            <SettingsRow Icon={IconMoon} label="Appearance" desc="Light mode" onPress={() => {}} />
-            <View style={styles.divider} />
-            <SettingsRow Icon={IconDownload} label="Export Data" desc="Download your diary & logs" onPress={() => {}} />
-            <View style={styles.divider} />
-            <SettingsRow Icon={IconHelpCircle} label="Help & Support" onPress={() => {}} />
-            <View style={styles.divider} />
-            <SettingsRow Icon={IconStar} label="Rate the App" onPress={() => {}} />
+            <SettingsRow Icon={IconClipboard} label="Privacy Policy" onPress={() => router.push('/settings/privacy')} />
           </View>
 
           {/* Developer - only in dev builds. Verifies the detection → nudge

@@ -11,7 +11,7 @@
 > matching section here and bump "Last updated" + add a Changelog line.**
 > Treat it as the source of truth that travels with the code.
 
-**Last updated:** 2026-09-04
+**Last updated:** 2026-09-15
 **App name:** BettingLog (Android package `com.bettinglog.app`; some in-app copy says "Reflect")
 **One-line description:** A Philippines-focused, Android-first mobile app that helps people reduce gambling harm through daily check-ins, a reflective diary, self-assessments, spending awareness, and a step-by-step behavior plan.
 
@@ -44,7 +44,7 @@ Core loops the app supports:
 - **Backend:** **Supabase** (Postgres + Auth/GoTrue + Row-Level Security). Client `@supabase/supabase-js` v2.
 - **State:** React Context (no Redux). Two providers wrap the app (see §5).
 - **Storage:** `expo-secure-store` (auth session, encrypted) + `@react-native-async-storage/async-storage` (small local prefs).
-- **UI/graphics:** `react-native-svg`, `expo-linear-gradient`, custom SVG icon set, `@react-native-community/datetimepicker`.
+- **UI/graphics:** `react-native-svg`, `expo-linear-gradient`, custom SVG icon set, `@react-native-community/datetimepicker`. Brand font **Nunito** (`expo-font` + `@expo-google-fonts/nunito`) loaded in `app/_layout.tsx` for the logo wordmark.
 - **Auth extras:** `expo-web-browser` + `expo-linking` (Google OAuth + password-reset deep links, PKCE flow).
 - **Platform:** **Android-first** (primary/only shipping target). `expo-router` web + `react-native-web` exist only as a dev-preview convenience; some native features degrade or are stubbed on web.
 - **Node scripts:** `npm run typecheck` (`tsc --noEmit`), `npm test` (jest), `npm run android`.
@@ -226,6 +226,16 @@ inactivity** — if sign-in fails for everyone at once, resume it in the dashboa
   segment** to avoid this — don't reintroduce a single full-height SVG/gradient.
 - **`ScrollView` needs `flex: 1`** inside a bounded parent or it clips instead of
   scrolling (this bit the Journey Map).
+- **Custom fonts need `expo-file-system` installed.** `useFonts`/`loadAsync` go
+  through `expo-asset`, whose native `AppDirectories` module lives in
+  `expo-file-system`. If it is missing, every font load rejects **silently** and
+  text falls back to the system font with no visible error — the symptom is
+  "my custom font just doesn't apply". Never install `expo-asset` with
+  `--no-save`: that adds the JS but not the native module.
+- **Swapping an image in `assets/` needs the RN bundle cache cleared.** Gradle
+  reports `:app:packageRelease UP-TO-DATE` and silently ships the OLD image.
+  `rm -rf android/app/build/generated/{res,assets}/createBundleReleaseJsAndAssets`
+  then rebuild.
 - **SecureStore 2048-byte limit** — keep the chunked storage adapter.
 - **Auto-refresh needs AppState** wiring (kept in `supabase.ts`), or tokens expire.
 - **Release builds strip most JS `console` logs** from logcat; debug via UI/state.
@@ -258,6 +268,44 @@ inactivity** — if sign-in fails for everyone at once, resume it in the dashboa
 ---
 
 ## 13. Changelog (append newest on top; update on every app change)
+
+- **2026-09-18** — QA hardening + app icon. Built a proper adaptive launcher
+  icon (the app's own dice mascot on brand green `#5FB56E`) at all densities
+  incl. round + adaptive foreground (`android/.../res/mipmap-*`,
+  `mipmap-anydpi-v26`, `assets/icon.png` + `adaptive-icon.png`, wired in
+  `app.json`). Removed 6 dead settings buttons (`onPress={() => {}}`): wired
+  "Privacy Policy" → `/settings/privacy`, removed the non-functional General
+  group (Language/Appearance/Export Data/Help/Rate). Fixed the offline
+  cold-start spinner: the provider now hydrates the cached snapshot instantly on
+  launch and refreshes in the background (`hasLoadedRef`), so returning users /
+  offline launches open immediately. Release APKs are now v1+v2+v3 signed
+  (`enableV1Signing` in android build.gradle) so Infinix/Transsion installers
+  accept them. Verified all nav targets resolve and all inputs are bound.
+
+- **2026-09-16** — Fixed the Nunito brand font, which was silently never
+  applying (all logo/tagline text fell back to the system font). Root cause:
+  **`expo-file-system` was not installed at all**, so `expo-asset`'s
+  `downloadAsync` rejected with "Module
+  `expo.modules.interfaces.filesystem.AppDirectories` not found" and every
+  `useFonts` call failed with no visible error. Installing `expo-file-system`
+  (~18.0.12) fixed it - `isLoaded` now true for both weights. Also made the
+  mascot animated: `src/components/ui/Mascot.tsx` now idles with a slow float +
+  gentle tilt and plays a 360-degree "dice roll" with a squash-and-stretch pop
+  when tapped (transform-only, native driver, and it honours the OS
+  reduce-motion setting). It takes an optional `source`, so `Logo` reuses it for
+  the full logo art on login/splash; the simplified dice art stays the default
+  for the journey map and onboarding.
+
+- **2026-09-15** — Added the BettingLog brand logo. `src/components/ui/Logo.tsx`
+  renders the mascot artwork (`assets/mascot.png`) with the "BettingLog"
+  wordmark ("Betting" navy `#072a4b`, "Log" green `#5a9d5f`) and the tagline
+  "Track. Reflect. Regain Control." in the **Nunito** font
+  (`@expo-google-fonts/nunito` 700/800, loaded via `useFonts` in
+  `app/_layout.tsx`). `variant="stack"` (mascot over wordmark + tagline) is used
+  in the login header (`app/login.tsx`, replacing the old wave-in-circle
+  placeholder); `variant="row"` (small mascot + wordmark) is the splash brand
+  row (`app/splash.tsx`). Logo images live in `assets/`: `mascot.png`
+  (text-free mascot), `bettinglog-logo.png` (full lockup), `bettinglog-wordmark.png`.
 
 - **2026-09-10** — Offline support + auto-sync. `app-provider` now caches the
   display snapshot per user (`src/services/offlineCache.ts`); if a refresh fetch

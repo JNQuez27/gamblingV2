@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SvgXml } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
+import { Logo } from '@/components/ui/Logo';
 import { ONBOARDING_ART, type ArtKey } from '@/constants/onboardingArt';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -220,6 +221,7 @@ export default function SplashScreen() {
 
       <SafeAreaView style={styles.safe}>
         <View style={styles.skipRow}>
+          <Logo variant="row" size={40} />
           {!isLast && (
             <TouchableOpacity onPress={goToLogin} hitSlop={12} activeOpacity={0.6} accessibilityRole="button" accessibilityLabel="Skip introduction">
               <Text style={styles.skip}>Skip</Text>
@@ -285,7 +287,7 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#eaf4fd' },
   safe: { flex: 1 },
-  skipRow: { alignItems: 'flex-end', paddingTop: 12, paddingHorizontal: 28, minHeight: 40 },
+  skipRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, paddingHorizontal: 28, minHeight: 44 },
   skip: { color: Colors.textMuted, fontSize: 14, letterSpacing: 0.3 },
   pager: { flex: 1 },
   slide: { width: W, flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
