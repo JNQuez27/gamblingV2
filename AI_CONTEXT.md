@@ -272,9 +272,11 @@ inactivity** — if sign-in fails for everyone at once, resume it in the dashboa
 - **2026-09-30** — Added a global offline banner. A red "No internet connection ·
   Connect to Internet" bar (`src/components/ui/OfflineBanner.tsx`) shows at the
   top above every screen's header while the device is offline, and pushes the
-  content down (does not overlay) via a top-inset override in `app/_layout.tsx`
-  (`AppScaffold` wraps the Stack in a `SafeAreaInsetsContext` with top:0 when
-  offline; status bar flips to light). Connectivity is tracked in the provider
+  content down (does not overlay, no gap) via `app/_layout.tsx`: `AppScaffold`
+  renders the banner then wraps the Stack in a NESTED `SafeAreaProvider`, so the
+  screens (native `<SafeAreaView>`) re-measure their top inset as 0 when they sit
+  below the banner and normal when online; status bar flips to light offline.
+  Connectivity is tracked in the provider
   as `isOffline` - flipped by refresh outcomes plus an 8s reachability probe to
   the Supabase health endpoint (no new native dependency). Verified: banner
   appears on airplane-mode and clears on reconnect.
