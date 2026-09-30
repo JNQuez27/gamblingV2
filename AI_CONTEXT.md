@@ -269,6 +269,16 @@ inactivity** — if sign-in fails for everyone at once, resume it in the dashboa
 
 ## 13. Changelog (append newest on top; update on every app change)
 
+- **2026-09-30** — Added a global offline banner. A red "No internet connection ·
+  Connect to Internet" bar (`src/components/ui/OfflineBanner.tsx`) shows at the
+  top above every screen's header while the device is offline, and pushes the
+  content down (does not overlay) via a top-inset override in `app/_layout.tsx`
+  (`AppScaffold` wraps the Stack in a `SafeAreaInsetsContext` with top:0 when
+  offline; status bar flips to light). Connectivity is tracked in the provider
+  as `isOffline` - flipped by refresh outcomes plus an 8s reachability probe to
+  the Supabase health endpoint (no new native dependency). Verified: banner
+  appears on airplane-mode and clears on reconnect.
+
 - **2026-09-18** — QA hardening + app icon. Built a proper adaptive launcher
   icon (the app's own dice mascot on brand green `#5FB56E`) at all densities
   incl. round + adaptive foreground (`android/.../res/mipmap-*`,

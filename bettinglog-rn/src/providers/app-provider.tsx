@@ -34,6 +34,7 @@ import { SEED_IDS } from '@/constants/seedIds';
 // this through hooks - they never call services or Supabase directly.
 interface AppContextValue {
   isLoading: boolean;
+  isOffline: boolean;
 
   // Theory-driven profile
   readinessStage: ReadinessStage;
@@ -89,6 +90,7 @@ interface AppContextValue {
 
 const defaults: AppContextValue = {
   isLoading: true,
+  isOffline: false,
   readinessStage: 'contemplation',
   moralReasoningLevel: 'pre-conventional',
   streak: 0,
@@ -165,6 +167,7 @@ const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children })
   const { user } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntriesByDate>({});
   const [spendingLimit, setSpendingLimit] = useState(0);
   const [spendingSummary, setSpendingSummary] = useState<SpendingSummary | null>(null);
@@ -336,7 +339,9 @@ const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children })
       const snap = await fetchSnapshot(user.id);
       applySnapshot(snap);
       void saveSnapshot(user.id, snap);
-    } catch {
+      setIsOffline(false);
+    } catch (e) {
+      if (isOfflineError(e)) setIsOffline(true);
       const cached = await loadSnapshot<Snapshot>(user.id);
       if (cached) applySnapshot(cached);
     } finally {
@@ -394,6 +399,38 @@ const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children })
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // Lightweight connectivity probe so the offline banner reacts even when the
+  // user is just sitting on a screen. Any HTTP response (even 401) = reachable;
+  // a rejected fetch (no network) = offline. Runs while the app is foregrounded.
+  useEffect(() => {
+    let alive = true;
+    const url = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '') + '/auth/v1/health';
+    const probe = async () => {
+      if (!process.env.EXPO_PUBLIC_SUPABASE_URL) return;
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 4000);
+        await fetch(url, { method: 'GET', signal: ctrl.signal });
+        clearTimeout(t);
+        if (alive) setIsOffline(false);
+      } catch {
+        if (alive) setIsOffline(true);
+      }
+    };
+    probe();
+    const id = setInterval(() => {
+      if (AppState.currentState === 'active') probe();
+    }, 8000);
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') probe();
+    });
+    return () => {
+      alive = false;
+      clearInterval(id);
+      sub.remove();
+    };
+  }, []);
 
   const addDiaryEntry = async (mood: string, note: string) => {
     if (!user) return;
@@ -543,6 +580,7 @@ const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const value: AppContextValue = {
     isLoading,
+    isOffline,
     readinessStage,
     moralReasoningLevel,
     streak,
